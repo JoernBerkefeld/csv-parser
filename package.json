@@ -4,7 +4,10 @@
     "description": "Native ESM streaming CSV parser fork with a default factory API and CLI",
     "type": "module",
     "license": "MIT",
-    "repository": "github:JoernBerkefeld/csv-parser",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/JoernBerkefeld/csv-parser.git"
+    },
     "author": "Mathias Buus (mafintosh)",
     "contributors": [
         "Jörn Berkefeld <joern.berkefeld@gmail.com> (fork modifications)"
@@ -19,7 +22,7 @@
         "registry": "https://registry.npmjs.org/"
     },
     "bin": {
-        "csv-parser": "./bin/csv-parser"
+        "csv-parser": "bin/csv-parser"
     },
     "main": "index.js",
     "types": "index.d.ts",

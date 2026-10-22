@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
@@ -62,6 +63,25 @@ const missingVersion = () => ({
     stdout: JSON.stringify({ error: { code: 'E404' } }),
 });
 const visibleVersion = (version) => ({ status: 0, stdout: JSON.stringify(version) });
+
+test('npm publish normalization retains the CLI without metadata autocorrections', async () => {
+    assert.ok(process.env.npm_execpath, 'Run tooling tests through npm test');
+    const npmRequire = createRequire(process.env.npm_execpath);
+    const PackageJson = npmRequire('@npmcli/package-json');
+    const root = new URL('../', import.meta.url);
+    const { fileURLToPath } = await import('node:url');
+    const changes = [];
+    const package_ = await PackageJson.fix(fileURLToPath(root), { changes });
+    assert.deepEqual(changes, []);
+    await package_.prepare();
+    assert.deepEqual(package_.content.bin, { 'csv-parser': 'bin/csv-parser' });
+    assert.deepEqual(package_.content.repository, {
+        type: 'git',
+        url: 'git+https://github.com/JoernBerkefeld/csv-parser.git',
+    });
+    const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
+    assert.deepEqual(lock.packages[''].bin, package_.content.bin);
+});
 
 test('CI and release verification cover exact supported Node boundaries', () => {
     const codeWorkflow = readFileSync(
