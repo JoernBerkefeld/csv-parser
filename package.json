@@ -1,89 +1,102 @@
 {
-  "name": "csv-parser",
-  "version": "3.2.1",
-  "description": "Streaming CSV parser that aims for maximum speed as well as compatibility with the csv-spectrum test suite",
-  "license": "MIT",
-  "repository": "mafintosh/csv-parser",
-  "author": "mafintosh",
-  "maintainers": [
-    "Andrew Powell <andrew@shellscape.org>"
-  ],
-  "homepage": "https://github.com/mafintosh/csv-parser",
-  "bugs": "https://github.com/mafintosh/csv-parser/issues",
-  "bin": {
-    "csv-parser": "./bin/csv-parser"
-  },
-  "main": "index.js",
-  "files": [
-    "bin/csv-parser",
-    "index.js",
-    "index.d.ts"
-  ],
-  "engines": {
-    "node": ">= 10"
-  },
-  "scripts": {
-    "bench": "bin/bench",
-    "commitlint": "commitlint",
-    "coverage": "nyc npm run test && nyc report --reporter=text-lcov > coverage.lcov",
-    "lint": "eslint .",
-    "lint-staged": "lint-staged",
-    "security": "npm audit",
-    "test": "ava && tsd"
-  },
-  "devDependencies": {
-    "@commitlint/cli": "^8.2.0",
-    "@commitlint/config-conventional": "^8.0.0",
-    "@types/node": "^12.0.0",
-    "ava": "^3.0.0",
-    "bops": "^1.0.0",
-    "chalk": "^2.4.2",
-    "concat-stream": "^2.0.0",
-    "csv-spectrum": "^1.0.0",
-    "eslint": "^6.4.0",
-    "eslint-config-standard": "^14.1.0",
-    "eslint-plugin-import": "^2.18.2",
-    "eslint-plugin-node": "^10.0.0",
-    "eslint-plugin-promise": "^4.1.1",
-    "eslint-plugin-standard": "^4.0.0",
-    "execa": "^2.1.0",
-    "globby": "^10.0.1",
-    "husky": "^3.0.0",
-    "lint-staged": "^9.0.2",
-    "loud-rejection": "^2.1.0",
-    "nyc": "^14.1.1",
-    "pre-commit": "^1.2.2",
-    "strip-ansi": "^5.2.0",
-    "text-table": "^0.2.0",
-    "time-span": "^3.1.0",
-    "tsd": "^0.8.0"
-  },
-  "directories": {
-    "example": "examples",
-    "test": "test"
-  },
-  "keywords": [
-    "csv",
-    "parser",
-    "fast",
-    "json"
-  ],
-  "ava": {
+    "name": "@joernberkefeld/csv-parser",
+    "version": "4.0.0",
+    "description": "Native ESM streaming CSV parser fork with a default factory API and CLI",
+    "type": "module",
+    "license": "MIT",
+    "repository": "github:JoernBerkefeld/csv-parser",
+    "author": "Mathias Buus (mafintosh)",
+    "contributors": [
+        "Jörn Berkefeld <joern.berkefeld@gmail.com> (fork modifications)"
+    ],
+    "maintainers": [
+        "Jörn Berkefeld <joern.berkefeld@gmail.com>"
+    ],
+    "homepage": "https://github.com/JoernBerkefeld/csv-parser#readme",
+    "bugs": "https://github.com/JoernBerkefeld/csv-parser/issues",
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "bin": {
+        "csv-parser": "./bin/csv-parser"
+    },
+    "main": "index.js",
+    "types": "index.d.ts",
     "files": [
-      "!**/fixtures/**",
-      "!**/helpers/**"
-    ]
-  },
-  "husky": {
-    "hooks": {
-      "commit-msg": "commitlint -e $HUSKY_GIT_PARAMS"
+        "bin/csv-parser",
+        "index.js",
+        "index.d.ts"
+    ],
+    "engines": {
+        "node": "^22.22.2 || >=24.15.0"
+    },
+    "scripts": {
+        "bench": "node bin/bench",
+        "coverage": "node scripts/coverage.mjs && tsd && npm run test:types --no-workspaces && node --test scripts/tooling.test.mjs",
+        "lint": "eslint . bin/csv-parser bin/bench --max-warnings 0",
+        "lint:fix": "eslint . bin/csv-parser bin/bench --fix --fix-type layout --max-warnings 0",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "prepare": "husky",
+        "check:lockfile": "node scripts/check-lockfile-registry-only.mjs",
+        "security": "npm audit",
+        "test": "ava && tsd && npm run test:types --no-workspaces && node --test scripts/tooling.test.mjs",
+        "test:types": "tsc --noEmit --strict --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 index.test-d.ts"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/node": "^22.20.5",
+        "ava": "^3.0.0",
+        "bops": "^1.0.0",
+        "c8": "^12.0.0",
+        "chalk": "^2.4.2",
+        "concat-stream": "^2.0.0",
+        "csv-spectrum": "^1.0.0",
+        "eslint": "^10.13.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-jsdoc": "^65.4.0",
+        "eslint-plugin-prettier": "^5.5.7",
+        "eslint-plugin-unicorn": "^78.0.0",
+        "execa": "^2.1.0",
+        "globals": "^17.13.0",
+        "globby": "^10.0.1",
+        "husky": "^9.1.7",
+        "loud-rejection": "^2.1.0",
+        "prettier": "^3.9.10",
+        "strip-ansi": "^5.2.0",
+        "text-table": "^0.2.0",
+        "time-span": "^3.1.0",
+        "tsd": "^0.33.0",
+        "typescript": "~5.9.3"
+    },
+    "directories": {
+        "example": "examples",
+        "test": "test"
+    },
+    "keywords": [
+        "csv",
+        "parser",
+        "fast",
+        "json"
+    ],
+    "tsd": {
+        "compilerOptions": {
+            "module": "NodeNext",
+            "moduleResolution": "NodeNext",
+            "types": [
+                "node"
+            ],
+            "typeRoots": [
+                "./node_modules/@types"
+            ]
+        }
+    },
+    "ava": {
+        "files": [
+            "test/**/*.js",
+            "!**/fixtures/**",
+            "!**/helpers/**"
+        ]
     }
-  },
-  "lint-staged": {
-    "*.js": [
-      "eslint --fix",
-      "git add"
-    ]
-  },
-  "pre-commit": "lint-staged"
 }

@@ -1,16 +1,16 @@
-const test = require('ava')
+import test from 'ava';
 
-const { collect } = require('./helpers/helper')
+import { collect } from './helpers/helper.js';
 
 test.cb('strict', (t) => {
-  const verify = (err, lines) => {
-    t.is(err.name, 'RangeError', 'err name')
-    t.is(err.message, 'Row length does not match headers', 'strict row length')
-    t.snapshot(lines[0], 'first row')
-    t.snapshot(lines[1], 'second row')
-    t.is(lines.length, 2, '2 rows before error')
-    t.end()
-  }
+    const verify = (error, lines) => {
+        t.is(error.name, 'RangeError', 'err name');
+        t.is(error.message, 'Row length does not match headers', 'strict row length');
+        t.snapshot(lines[0], 'first row');
+        t.snapshot(lines[1], 'second row');
+        t.is(lines.length, 2, '2 rows before error');
+        t.end();
+    };
 
-  collect('strict', { strict: true }, verify)
-})
+    collect('strict', { strict: true }, verify);
+});

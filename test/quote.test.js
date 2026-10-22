@@ -1,41 +1,41 @@
-const test = require('ava')
+import test from 'ava';
 
-const { collect } = require('./helpers/helper')
+import { collect } from './helpers/helper.js';
 
 test.cb('custom quote character', (t) => {
-  const verify = (err, lines) => {
-    t.false(err, 'no err')
-    t.snapshot(lines[0], 'first row')
-    t.snapshot(lines[1], 'second row')
-    t.is(lines.length, 2, '2 rows')
-    t.end()
-  }
+    const verify = (error, lines) => {
+        t.false(error, 'no err');
+        t.snapshot(lines[0], 'first row');
+        t.snapshot(lines[1], 'second row');
+        t.is(lines.length, 2, '2 rows');
+        t.end();
+    };
 
-  collect('option-quote', { quote: "'" }, verify)
-})
+    collect('option-quote', { quote: "'" }, verify);
+});
 
 test.cb('custom quote and escape character', (t) => {
-  const verify = (err, lines) => {
-    t.false(err, 'no err')
-    t.snapshot(lines[0], 'first row')
-    t.snapshot(lines[1], 'second row')
-    t.snapshot(lines[2], 'third row')
-    t.is(lines.length, 3, '3 rows')
-    t.end()
-  }
+    const verify = (error, lines) => {
+        t.false(error, 'no err');
+        t.snapshot(lines[0], 'first row');
+        t.snapshot(lines[1], 'second row');
+        t.snapshot(lines[2], 'third row');
+        t.is(lines.length, 3, '3 rows');
+        t.end();
+    };
 
-  collect('option-quote-escape', { quote: "'", escape: '\\' }, verify)
-})
+    collect('option-quote-escape', { quote: "'", escape: '\\' }, verify);
+});
 
 test.cb('quote many', (t) => {
-  const verify = (err, lines) => {
-    t.false(err, 'no err')
-    t.snapshot(lines[0], 'first row')
-    t.snapshot(lines[1], 'second row')
-    t.snapshot(lines[2], 'third row')
-    t.is(lines.length, 3, '3 rows')
-    t.end()
-  }
+    const verify = (error, lines) => {
+        t.false(error, 'no err');
+        t.snapshot(lines[0], 'first row');
+        t.snapshot(lines[1], 'second row');
+        t.snapshot(lines[2], 'third row');
+        t.is(lines.length, 3, '3 rows');
+        t.end();
+    };
 
-  collect('option-quote-many', { quote: "'" }, verify)
-})
+    collect('option-quote-many', { quote: "'" }, verify);
+});

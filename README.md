@@ -1,17 +1,17 @@
-[tests]: 	http://img.shields.io/travis/mafintosh/csv-parser.svg
-[tests-url]: http://travis-ci.org/mafintosh/csv-parser
+# @joernberkefeld/csv-parser
 
-[cover]: https://codecov.io/gh/mafintosh/csv-parser/branch/master/graph/badge.svg
-[cover-url]: https://codecov.io/gh/mafintosh/csv-parser
+Fork of [mafintosh/csv-parser](https://github.com/mafintosh/csv-parser), originally
+created by Mathias Buus (mafintosh), with contributions and upstream maintenance
+by Andrew Powell and the upstream community. This fork is maintained independently
+by Jörn Berkefeld (<joern.berkefeld@gmail.com>); upstream maintainers are not
+responsible for maintaining this fork.
 
-[size]: https://packagephobia.now.sh/badge?p=csv-parser
-[size-url]: https://packagephobia.now.sh/result?p=csv-parser
-
-# csv-parser
-
-[![tests][tests]][tests-url]
-[![cover][cover]][cover-url]
-[![size][size]][size-url]
+Version 4.0.0 intentionally replaces upstream CommonJS with native ESM and raises
+the Node.js requirement to `^22.22.2 || >=24.15.0`. Import the default parser
+factory from `@joernberkefeld/csv-parser`; there is no CommonJS distribution.
+Parser behavior is unchanged, including the known issue with literal quotes
+inside unquoted fields. The quote-handling correction is deferred to 4.0.1.
+The MIT license and original copyright are retained.
 
 Streaming CSV parser that aims for maximum speed as well as compatibility with
 the [csv-spectrum](https://npmjs.org/csv-spectrum) CSV acid test suite.
@@ -25,7 +25,10 @@ to benchmark your data.
 [neat-csv](https://github.com/sindresorhus/neat-csv) can be used if a `Promise`
 based interface to `csv-parser` is needed.
 
-_Note: This module requires Node v8.16.0 or higher._
+_Runtime: Node.js `^22.22.2 || >=24.15.0`. Native ESM exposes one default parser
+factory; the `csv-parser` CLI name and TypeScript declarations are retained.
+Use `npm ci --no-workspaces`, `npm run lint:fix --no-workspaces`,
+`npm run lint --no-workspaces`, and `npm test --no-workspaces` in this repository._
 
 ## Benchmarks
 
@@ -67,13 +70,13 @@ _Note: This module requires Node v8.16.0 or higher._
 Using npm:
 
 ```console
-$ npm install csv-parser
+$ npm install @joernberkefeld/csv-parser
 ```
 
 Using yarn:
 
 ```console
-$ yarn add csv-parser
+$ yarn add @joernberkefeld/csv-parser
 ```
 
 ## Usage
@@ -91,21 +94,21 @@ Bugs Bunny,22
 
 It could then be parsed, and results shown like so:
 
-``` js
-const csv = require('csv-parser')
-const fs = require('fs')
+```js
+import csv from '@joernberkefeld/csv-parser';
+import fs from 'node:fs';
 const results = [];
 
 fs.createReadStream('data.csv')
-  .pipe(csv())
-  .on('data', (data) => results.push(data))
-  .on('end', () => {
-    console.log(results);
-    // [
-    //   { NAME: 'Daffy Duck', AGE: '24' },
-    //   { NAME: 'Bugs Bunny', AGE: '22' }
-    // ]
-  });
+    .pipe(csv())
+    .on('data', (data) => results.push(data))
+    .on('end', () => {
+        console.log(results);
+        // [
+        //   { NAME: 'Daffy Duck', AGE: '24' },
+        //   { NAME: 'Bugs Bunny', AGE: '22' }
+        // ]
+    });
 ```
 
 To specify options for `csv`, pass an object argument to the function. For
@@ -155,11 +158,11 @@ If `false`, specifies that the first row in a data file does _not_ contain
 headers, and instructs the parser to use the column index as the key for each column.
 Using `headers: false` with the same `data.csv` example from above would yield:
 
-``` js
+```js
 [
-  { '0': 'Daffy Duck', '1': 24 },
-  { '0': 'Bugs Bunny', '1': 22 }
-]
+    { 0: 'Daffy Duck', 1: 24 },
+    { 0: 'Bugs Bunny', 1: 22 },
+];
 ```
 
 _Note: If using the `headers` for an operation on a file which contains headers on the first line, specify `skipLines: 1` to skip over the row, or the headers row will appear as normal row data. Alternatively, use the `mapHeaders` option to manipulate existing headers in that scenario._
@@ -168,12 +171,12 @@ _Note: If using the `headers` for an operation on a file which contains headers 
 
 Type: `Function`
 
-A function that can be used to modify the values of each header. Return a `String` to modify the header. Return `null` to remove the header, and it's column, from the results. 
+A function that can be used to modify the values of each header. Return a `String` to modify the header. Return `null` to remove the header, and it's column, from the results.
 
 ```js
 csv({
-  mapHeaders: ({ header, index }) => header.toLowerCase()
-})
+    mapHeaders: ({ header, index }) => header.toLowerCase(),
+});
 ```
 
 ##### Parameters
@@ -189,8 +192,8 @@ A function that can be used to modify the content of each column. The return val
 
 ```js
 csv({
-  mapValues: ({ header, index, value }) => value.toLowerCase()
-})
+    mapValues: ({ header, index, value }) => value.toLowerCase(),
+});
 ```
 
 ##### Parameters
@@ -256,8 +259,8 @@ Default: `false`
 If `true`, instructs the parser that the number of columns in each row must match
 the number of `headers` specified or throws an exception.
 if `false`: the headers are mapped to the column index
-   less columns: any missing column in the middle will result in a wrong property mapping!
-   more columns: the aditional columns will create a "_"+index properties - eg. "_10":"value"
+less columns: any missing column in the middle will result in a wrong property mapping!
+more columns: the aditional columns will create a "_"+index properties - eg. "_10":"value"
 
 #### outputByteOffset
 
@@ -284,10 +287,10 @@ callback is an `Array[String]` containing the header names.
 
 ```js
 fs.createReadStream('data.csv')
-  .pipe(csv())
-  .on('headers', (headers) => {
-    console.log(`First header: ${headers[0]}`)
-  })
+    .pipe(csv())
+    .on('headers', (headers) => {
+        console.log(`First header: ${headers[0]}`);
+    });
 ```
 
 ### Readable Stream Events
@@ -328,6 +331,7 @@ cat data.tsv | csv-parser -s $'\t'
 
 Users may encounter issues with the encoding of a CSV file. Transcoding the
 source stream can be done neatly with a modules such as:
+
 - [`iconv-lite`](https://www.npmjs.com/package/iconv-lite)
 - [`iconv`](https://www.npmjs.com/package/iconv)
 
@@ -338,15 +342,15 @@ of a pipeline.
 
 Some CSV files may be generated with, or contain a leading [Byte Order Mark](https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8). This may cause issues parsing headers and/or data from your file. From Wikipedia:
 
->The Unicode Standard permits the BOM in UTF-8, but does not require nor recommend its use. Byte order has no meaning in UTF-8.
+> The Unicode Standard permits the BOM in UTF-8, but does not require nor recommend its use. Byte order has no meaning in UTF-8.
 
 To use this module with a file containing a BOM, please use a module like [strip-bom-stream](https://github.com/sindresorhus/strip-bom-stream) in your pipeline:
 
 ```js
-const fs = require('fs');
+import fs from 'node:fs';
 
-const csv = require('csv-parser');
-const stripBom = require('strip-bom-stream');
+import csv from '@joernberkefeld/csv-parser';
+import stripBom from 'strip-bom-stream';
 
 fs.createReadStream('data.csv')
   .pipe(stripBom())

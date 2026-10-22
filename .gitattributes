@@ -1,3 +1,5 @@
 package-lock.json -diff
-* text=auto
-bin/* eol=lf
+* text=auto eol=lf
+# Preserve byte-sensitive upstream fixture data and AVA snapshots.
+test/fixtures/** -text
+test/snapshots/** -text

@@ -1,35 +1,45 @@
-const fs = require('fs')
-const path = require('path')
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const csv = require('../..')
+import csv from '../../index.js';
 
-const read = fs.createReadStream
+const read = fs.createReadStream;
 
-// helpers
-function fixture (name) {
-  return path.join(__dirname, '../fixtures', name)
+/**
+ * Resolve an inherited fixture relative to this module.
+ * @param {string} name - Fixture filename.
+ * @returns {string} Absolute fixture path.
+ */
+function fixture(name) {
+    return fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url));
 }
 
-function collect (file, opts, cb) {
-  if (typeof opts === 'function') {
-    return collect(file, null, opts)
-  }
-  const data = read(fixture(`${file}.csv`))
-  const lines = []
-  const parser = csv(opts)
-  data
-    .pipe(parser)
-    .on('data', (line) => {
-      lines.push(line)
-    })
-    .on('error', (err) => {
-      cb(err, lines)
-    })
-    .on('end', () => {
-      // eslint-disable-next-line standard/no-callback-literal
-      cb(false, lines)
-    })
-  return parser
+/**
+ * Collect a fixture with the inherited callback test contract.
+ * @param {string} file - Fixture basename without extension.
+ * @param {object|Array|((error: Error|false, rows: object[]) => void)} options - Parser options or completion callback.
+ * @param {(error: Error|false, rows: object[]) => void} [callback] - Receives an error or false, then parsed rows.
+ * @returns {import('node:stream').Transform} Parser stream.
+ */
+function collect(file, options, callback) {
+    if (typeof options === 'function') {
+        callback = options;
+        options = undefined;
+    }
+    const data = read(fixture(`${file}.csv`));
+    const lines = [];
+    const parser = csv(options);
+    data.pipe(parser)
+        .on('data', (line) => {
+            lines.push(line);
+        })
+        .on('error', (error) => {
+            callback(error, lines);
+        })
+        .on('end', () => {
+            callback(false, lines);
+        });
+    return parser;
 }
 
-module.exports = { collect, fixture }
+export { collect, fixture };

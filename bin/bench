@@ -1,51 +1,53 @@
 #!/usr/bin/env node
-require('loud-rejection')()
+import loudRejection from 'loud-rejection';
+import { createReadStream } from 'node:fs';
+import path from 'node:path';
+import globby from 'globby';
+import chalk from 'chalk';
+import table from 'text-table';
+import timeSpan from 'time-span';
+import strip from 'strip-ansi';
 
-const { createReadStream } = require('fs')
-const { basename } = require('path')
-const globby = require('globby')
-const chalk = require('chalk')
-const table = require('text-table')
-const timeSpan = require('time-span')
-const strip = require('strip-ansi')
+import csv from '../index.js';
 
-const csv = require('../')
+loudRejection();
 
 const run = async () => {
-  const paths = process.argv[2] || await globby(['test/fixtures/**/*.csv'])
-  const rows = []
+    const paths = process.argv[2] || (await globby(['test/fixtures/**/*.csv']));
+    const rows = [];
 
-  for (const path of [].concat(paths)) {
-    await new Promise((resolve) => {
-      let rowsParsed = 0
-      const end = timeSpan()
-      const data = []
-      createReadStream(path)
-        .pipe(csv())
-        .on('data', (line) => {
-          rowsParsed++
-          data.push(line)
-        })
-        .on('finish', () => {
-          const duration = end().toPrecision(2)
-          const color = duration <= 10 ? 'green' : (duration > 100 ? 'red' : 'yellow')
-          const fileName = chalk.blue(basename(path))
-          rows.push(['', fileName, rowsParsed, chalk[color](`${duration}ms`)])
-          resolve()
-        })
-    })
-  }
-
-  rows.unshift(['', 'Filename', 'Rows Parsed', 'Duration'].map(h => chalk.dim.underline(h)))
-
-  const results = table(rows, {
-    align: [ 'l', 'l', 'r', 'r' ],
-    stringLength (str) {
-      return strip(str).length
+    const filePaths = Array.isArray(paths) ? paths : [paths];
+    for (const filePath of filePaths) {
+        await new Promise((resolve) => {
+            let rowsParsed = 0;
+            const end = timeSpan();
+            const data = [];
+            createReadStream(filePath)
+                .pipe(csv())
+                .on('data', (line) => {
+                    rowsParsed++;
+                    data.push(line);
+                })
+                .on('finish', () => {
+                    const duration = end().toPrecision(2);
+                    const color = duration <= 10 ? 'green' : duration > 100 ? 'red' : 'yellow';
+                    const fileName = chalk.blue(path.basename(filePath));
+                    rows.push(['', fileName, rowsParsed, chalk[color](`${duration}ms`)]);
+                    resolve();
+                });
+        });
     }
-  })
 
-  console.log(`\n${results}`)
-}
+    rows.unshift(['', 'Filename', 'Rows Parsed', 'Duration'].map((h) => chalk.dim.underline(h)));
 
-run()
+    const results = table(rows, {
+        align: ['l', 'l', 'r', 'r'],
+        stringLength(string_) {
+            return strip(string_).length;
+        },
+    });
+
+    console.log(`\n${results}`);
+};
+
+await run();
