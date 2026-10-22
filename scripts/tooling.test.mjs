@@ -29,7 +29,7 @@ function simulatePublish(version, responses) {
             require: (specifier) => {
                 if (specifier === 'node:assert/strict') return assert;
                 if (specifier === './package.json') {
-                    return { name: '@joernberkefeld/csv-parser', version };
+                    return { name: '@joern.berkefeld/csv-parser', version };
                 }
                 assert.equal(specifier, 'node:child_process');
                 return {
@@ -74,12 +74,15 @@ test('npm publish normalization retains the CLI without metadata autocorrections
     const package_ = await PackageJson.fix(fileURLToPath(root), { changes });
     assert.deepEqual(changes, []);
     await package_.prepare();
+    assert.equal(package_.content.name, '@joern.berkefeld/csv-parser');
     assert.deepEqual(package_.content.bin, { 'csv-parser': 'bin/csv-parser' });
     assert.deepEqual(package_.content.repository, {
         type: 'git',
         url: 'git+https://github.com/JoernBerkefeld/csv-parser.git',
     });
     const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
+    assert.equal(lock.name, package_.content.name);
+    assert.equal(lock.packages[''].name, package_.content.name);
     assert.deepEqual(lock.packages[''].bin, package_.content.bin);
 });
 
@@ -137,7 +140,7 @@ test('later missing versions publish publicly with provenance and an explicit re
         [
             [
                 'view',
-                '@joernberkefeld/csv-parser@4.0.1',
+                '@joern.berkefeld/csv-parser@4.0.1',
                 'version',
                 '--json',
                 '--registry=https://registry.npmjs.org/',

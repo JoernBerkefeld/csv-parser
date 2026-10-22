@@ -47,7 +47,7 @@ jobs:
                   node <<'NODE'
                   const assert = require('node:assert/strict');
                   const pkg = require('./package.json');
-                  assert.equal(pkg.name, '@joernberkefeld/csv-parser');
+                  assert.equal(pkg.name, '@joern.berkefeld/csv-parser');
                   assert.equal(process.env.RELEASE_TAG, `v${pkg.version}`, 'Release tag must equal v + manifest version');
                   assert.equal(pkg.publishConfig.access, 'public');
                   assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org/');

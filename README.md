@@ -1,4 +1,4 @@
-# @joernberkefeld/csv-parser
+# @joern.berkefeld/csv-parser
 
 Fork of [mafintosh/csv-parser](https://github.com/mafintosh/csv-parser), originally
 created by Mathias Buus (mafintosh), with contributions and upstream maintenance
@@ -8,7 +8,7 @@ responsible for maintaining this fork.
 
 Version 4.0.0 intentionally replaces upstream CommonJS with native ESM and raises
 the Node.js requirement to `^22.22.2 || >=24.15.0`. Import the default parser
-factory from `@joernberkefeld/csv-parser`; there is no CommonJS distribution.
+factory from `@joern.berkefeld/csv-parser`; there is no CommonJS distribution.
 This is a module/runtime/tooling modernization, not a parser behavior fix;
 behavioral parity with the inherited parser does not establish correctness.
 Known inherited limitations include literal quotes inside unquoted fields and
@@ -72,13 +72,13 @@ Use `npm ci --no-workspaces`, `npm run lint:fix --no-workspaces`,
 Using npm:
 
 ```console
-$ npm install @joernberkefeld/csv-parser
+$ npm install @joern.berkefeld/csv-parser
 ```
 
 Using yarn:
 
 ```console
-$ yarn add @joernberkefeld/csv-parser
+$ yarn add @joern.berkefeld/csv-parser
 ```
 
 ## Usage
@@ -97,7 +97,7 @@ Bugs Bunny,22
 It could then be parsed, and results shown like so:
 
 ```js
-import csv from '@joernberkefeld/csv-parser';
+import csv from '@joern.berkefeld/csv-parser';
 import fs from 'node:fs';
 const results = [];
 
@@ -351,7 +351,7 @@ To use this module with a file containing a BOM, please use a module like [strip
 ```js
 import fs from 'node:fs';
 
-import csv from '@joernberkefeld/csv-parser';
+import csv from '@joern.berkefeld/csv-parser';
 import stripBom from 'strip-bom-stream';
 
 fs.createReadStream('data.csv')

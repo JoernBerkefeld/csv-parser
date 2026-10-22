@@ -130,7 +130,7 @@ Bugs Bunny,22
  * // Daffy Duck,24
  * // Bugs Bunny,22
  *
- * import csv from '@joernberkefeld/csv-parser';
+ * import csv from '@joern.berkefeld/csv-parser';
  * import * as fs from 'node:fs';
  *
  * const results = [];
