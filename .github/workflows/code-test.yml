@@ -1,0 +1,28 @@
+name: Code tests
+
+on:
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Lint and test (Node ${{ matrix.node }})
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                node: ['22.22.2', '24.15.0']
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: ${{ matrix.node }}
+                  cache: npm
+            - run: npm ci --no-workspaces
+            - run: npm run lint --no-workspaces
+            - run: npm test --no-workspaces

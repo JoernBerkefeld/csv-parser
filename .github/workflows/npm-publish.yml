@@ -1,0 +1,127 @@
+name: Publish npm on release
+
+on:
+    release:
+        types: [published]
+
+permissions:
+    contents: read
+
+jobs:
+    test:
+        name: Lint and test (Node ${{ matrix.node }})
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                node: ['22.22.2', '24.15.0']
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: ${{ matrix.node }}
+                  cache: npm
+            - run: npm ci --no-workspaces
+            - run: npm run lint --no-workspaces
+            - run: npm test --no-workspaces
+
+    publish-npm:
+        needs: test
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24.15.0'
+                  registry-url: https://registry.npmjs.org/
+                  cache: npm
+            # Trusted publishing requires npm >=11.5.1; do not rely on Node's bundled npm.
+            - run: npm install --global npm@11.5.1
+            - name: Validate release identity
+              env:
+                  RELEASE_TAG: ${{ github.event.release.tag_name }}
+              run: |
+                  node <<'NODE'
+                  const assert = require('node:assert/strict');
+                  const pkg = require('./package.json');
+                  assert.equal(pkg.name, '@joernberkefeld/csv-parser');
+                  assert.equal(process.env.RELEASE_TAG, `v${pkg.version}`, 'Release tag must equal v + manifest version');
+                  assert.equal(pkg.publishConfig.access, 'public');
+                  assert.equal(pkg.publishConfig.registry, 'https://registry.npmjs.org/');
+                  NODE
+            - run: npm ci --no-workspaces
+            - name: Check package contents
+              run: |
+                  node <<'NODE'
+                  const assert = require('node:assert/strict');
+                  const { execFileSync } = require('node:child_process');
+                  const [pack] = JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json', '--no-workspaces'], { encoding: 'utf8' }));
+                  const expected = ['LICENSE', 'README.md', 'bin/csv-parser', 'index.d.ts', 'index.js', 'package.json'];
+                  assert.deepEqual(pack.files.map(file => file.path).sort(), expected.sort(), 'Unexpected or missing published files');
+                  NODE
+            - name: Publish exact version or skip if already published
+              run: |
+                  node <<'NODE'
+                  const assert = require('node:assert/strict');
+                  const { spawnSync } = require('node:child_process');
+                  const pkg = require('./package.json');
+                  const spec = `${pkg.name}@${pkg.version}`;
+                  const registry = '--registry=https://registry.npmjs.org/';
+
+                  function npm(args) {
+                      const result = spawnSync('npm', args, { encoding: 'utf8' });
+                      if (result.error) throw result.error;
+                      if (result.signal) throw new Error(`npm terminated by ${result.signal}`);
+                      return result;
+                  }
+
+                  function npmError(result) {
+                      for (const output of [result.stdout, result.stderr]) {
+                          try {
+                              const data = JSON.parse(output);
+                              if (data.error) return data.error;
+                          } catch {
+                              // Non-JSON diagnostics never establish registry absence.
+                          }
+                      }
+                      return {};
+                  }
+
+                  function exists() {
+                      const result = npm(['view', spec, 'version', '--json', registry, '--prefer-online']);
+                      if (result.status === 0) {
+                          assert.equal(JSON.parse(result.stdout), pkg.version, 'Registry returned a different version');
+                          return true;
+                      }
+                      if (npmError(result).code === 'E404') return false;
+                      throw new Error(`Exact-version registry lookup failed:\n${result.stdout}\n${result.stderr}`);
+                  }
+
+                  if (exists()) {
+                      console.log(`::notice::${spec} is already published; skipping npm publish.`);
+                      process.exit(0);
+                  }
+                  if (pkg.version === '4.0.0') {
+                      throw new Error('The first 4.0.0 publication must be performed manually by the user; hosted bootstrap is prohibited.');
+                  }
+
+                  const result = npm(['publish', '--json', '--no-workspaces', '--access', 'public', '--provenance', registry]);
+                  process.stdout.write(result.stdout);
+                  process.stderr.write(result.stderr);
+                  if (result.status === 0) {
+                      console.log(`::notice::npm accepted ${spec} at ${new Date().toISOString()}; exact registry availability and provenance verification remain separate release checks.`);
+                      process.exit(0);
+                  }
+
+                  const error = npmError(result);
+                  const conflict = error.code === 'EPUBLISHCONFLICT' ||
+                      (error.code === 'E403' && /cannot publish over (?:the )?previously published versions?/i.test(`${error.summary || ''}\n${error.detail || ''}`));
+                  if (conflict && exists()) {
+                      console.log(`::notice::${spec} was published concurrently; exact version confirmed, skipping conflict.`);
+                      process.exit(0);
+                  }
+                  throw new Error(`npm publish failed for ${spec}; no verified existing-version conflict.`);
+                  NODE

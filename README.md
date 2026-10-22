@@ -9,18 +9,20 @@ responsible for maintaining this fork.
 Version 4.0.0 intentionally replaces upstream CommonJS with native ESM and raises
 the Node.js requirement to `^22.22.2 || >=24.15.0`. Import the default parser
 factory from `@joernberkefeld/csv-parser`; there is no CommonJS distribution.
-Parser behavior is unchanged, including the known issue with literal quotes
-inside unquoted fields. The quote-handling correction is deferred to 4.0.1.
+This is a module/runtime/tooling modernization, not a parser behavior fix;
+behavioral parity with the inherited parser does not establish correctness.
+Known inherited limitations include literal quotes inside unquoted fields and
+CRLF detection when a stream chunk ends between `\r` and `\n`: values can retain
+a leading `\n`. For example, `name\r\nΔelta\r\nend` parses correctly as one buffer
+but retains leading line feeds in values when supplied one byte at a time.
 The MIT license and original copyright are retained.
 
 Streaming CSV parser that aims for maximum speed as well as compatibility with
 the [csv-spectrum](https://npmjs.org/csv-spectrum) CSV acid test suite.
 
 `csv-parser` can convert CSV into JSON at at rate of around 90,000 rows per
-second. Performance varies with the data used; try `bin/bench.js <your file>`
-to benchmark your data.
-
-`csv-parser` can be used in the browser with [browserify](http://browserify.org/).
+second. Performance varies with the data used; from a repository checkout, try
+`node bin/bench <your file>` to benchmark your data.
 
 [neat-csv](https://github.com/sindresorhus/neat-csv) can be used if a `Promise`
 based interface to `csv-parser` is needed.
