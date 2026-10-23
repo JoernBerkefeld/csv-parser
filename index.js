@@ -237,7 +237,8 @@ class CsvParser extends Transform {
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
     _flush(callback) {
-        if (this.state.escaped || !this._prev) return callback();
+        // A pending custom escape at EOF is literal data, not a reason to discard the row.
+        if (!this._prev) return callback();
         this.parseLine(this._prev, this.state.previousEnd, this._prev.length + 1); // plus since online -1s
         callback();
     }

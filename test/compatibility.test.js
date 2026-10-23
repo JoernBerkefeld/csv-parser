@@ -51,6 +51,14 @@ for (const separator of [',', '\t']) {
             t.deepEqual(await parse(chunks, { separator }), expected);
     });
 
+    test(`${label}: terminal custom escape preserves the baseline malformed quoted EOF row`, async (t) => {
+        // Characterized against 09fa542: retain the opening quote and final backslash.
+        const text = 'a' + separator + 'b\n"open\\';
+        for (const chunks of layouts(text)) {
+            t.deepEqual(await parse(chunks, { separator, escape: '\\' }), [{ a: '"open\\' }]);
+        }
+    });
+
     test(`${label}: 87-column synthetic records retain all exact values`, async (t) => {
         const headers = Array.from({ length: 87 }, (_, index) => `column${index}`);
         const values = headers.map((_, index) =>
