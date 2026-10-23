@@ -1,13 +1,13 @@
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import test from 'ava';
 import spectrum from 'csv-spectrum';
-import concat from 'concat-stream';
 import execa from 'execa';
 
 import csv from '../index.js';
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
 const eol = '\n';
 
@@ -25,70 +25,53 @@ for (const separator of [',', '\t']) {
     });
 }
 
-test.cb('simple csv', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.is(lines.length, 1, '1 row');
-        t.end();
-    };
-
-    collect('basic', verify);
+test('simple csv', async (t) => {
+    const { error, lines } = await collectAsync('basic');
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.is(lines.length, 1, '1 row');
 });
 
-test.cb('supports strings', (t) => {
+test('supports strings', async (t) => {
     const parser = csv();
-
-    parser.on('data', (data) => {
-        t.snapshot(data);
-        t.end();
-    });
 
     parser.write('hello\n');
     parser.write('world\n');
     parser.end();
+
+    for await (const data of parser) {
+        t.snapshot(data);
+    }
 });
 
-test.cb('newlines in a cell', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.snapshot(lines[2], 'fourth row');
-        t.is(lines.length, 3, '3 rows');
-        t.end();
-    };
-
-    collect('newlines', verify);
+test('newlines in a cell', async (t) => {
+    const { error, lines } = await collectAsync('newlines');
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.snapshot(lines[2], 'fourth row');
+    t.is(lines.length, 3, '3 rows');
 });
 
-test.cb('raw escaped quotes', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.snapshot(lines[2], 'third row');
-        t.is(lines.length, 3, '3 rows');
-        t.end();
-    };
-
-    collect('escape-quotes', verify);
+test('raw escaped quotes', async (t) => {
+    const { error, lines } = await collectAsync('escape-quotes');
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.snapshot(lines[2], 'third row');
+    t.is(lines.length, 3, '3 rows');
 });
 
-test.cb('raw escaped quotes and newlines', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.snapshot(lines[2], 'third row');
-        t.is(lines.length, 3, '3 rows');
-        t.end();
-    };
-
-    collect('quotes+newlines', verify);
+test('raw escaped quotes and newlines', async (t) => {
+    const { error, lines } = await collectAsync('quotes+newlines');
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.snapshot(lines[2], 'third row');
+    t.is(lines.length, 3, '3 rows');
 });
 
-test.cb('line with comma in quotes', (t) => {
+test('line with comma in quotes', async (t) => {
     const headers = Buffer.from('a,b,c,d,e\n');
     const line = Buffer.from('John,Doe,120 any st.,"Anytown, WW",08123\n');
     const correct = JSON.stringify({
@@ -104,13 +87,11 @@ test.cb('line with comma in quotes', (t) => {
     parser.write(line);
     parser.end();
 
-    parser.once('data', (data) => {
-        t.is(JSON.stringify(data), correct);
-        t.end();
-    });
+    const [data] = await Array.fromAsync(parser);
+    t.is(JSON.stringify(data), correct);
 });
 
-test.cb('line with newline in quotes', (t) => {
+test('line with newline in quotes', async (t) => {
     const headers = Buffer.from('a,b,c\n');
     const line = Buffer.from(`1,"ha ${eol}""ha"" ${eol}ha",3\n`);
     const correct = JSON.stringify({ a: '1', b: `ha ${eol}"ha" ${eol}ha`, c: '3' });
@@ -120,13 +101,11 @@ test.cb('line with newline in quotes', (t) => {
     parser.write(line);
     parser.end();
 
-    parser.once('data', (data) => {
-        t.is(JSON.stringify(data), correct);
-        t.end();
-    });
+    const [data] = await Array.fromAsync(parser);
+    t.is(JSON.stringify(data), correct);
 });
 
-test.cb('cell with comma in quotes', (t) => {
+test('cell with comma in quotes', async (t) => {
     const headers = Buffer.from('a\n');
     const cell = Buffer.from('"Anytown, WW"\n');
     const correct = 'Anytown, WW';
@@ -136,13 +115,11 @@ test.cb('cell with comma in quotes', (t) => {
     parser.write(cell);
     parser.end();
 
-    parser.once('data', (data) => {
-        t.is(data.a, correct);
-        t.end();
-    });
+    const [data] = await Array.fromAsync(parser);
+    t.is(data.a, correct);
 });
 
-test.cb('cell with newline', (t) => {
+test('cell with newline', async (t) => {
     const headers = Buffer.from('a\n');
     const cell = Buffer.from(`"why ${eol}hello ${eol}there"\n`);
     const correct = `why ${eol}hello ${eol}there`;
@@ -152,13 +129,11 @@ test.cb('cell with newline', (t) => {
     parser.write(cell);
     parser.end();
 
-    parser.once('data', (data) => {
-        t.is(data.a, correct);
-        t.end();
-    });
+    const [data] = await Array.fromAsync(parser);
+    t.is(data.a, correct);
 });
 
-test.cb('cell with escaped quote in quotes', (t) => {
+test('cell with escaped quote in quotes', async (t) => {
     const headers = Buffer.from('a\n');
     const cell = Buffer.from('"ha ""ha"" ha"\n');
     const correct = 'ha "ha" ha';
@@ -168,13 +143,11 @@ test.cb('cell with escaped quote in quotes', (t) => {
     parser.write(cell);
     parser.end();
 
-    parser.once('data', (data) => {
-        t.is(data.a, correct);
-        t.end();
-    });
+    const [data] = await Array.fromAsync(parser);
+    t.is(data.a, correct);
 });
 
-test.cb('cell with multibyte character', (t) => {
+test('cell with multibyte character', async (t) => {
     const headers = Buffer.from('a\n');
     const cell = Buffer.from('this ʤ is multibyte\n');
     const correct = 'this ʤ is multibyte';
@@ -184,85 +157,63 @@ test.cb('cell with multibyte character', (t) => {
     parser.write(cell);
     parser.end();
 
-    parser.once('data', (data) => {
-        t.is(data.a, correct, 'multibyte character is preserved');
-        t.end();
-    });
+    const [data] = await Array.fromAsync(parser);
+    t.is(data.a, correct, 'multibyte character is preserved');
 });
 
-test.cb('geojson', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        const lineObject = {
-            type: 'LineString',
-            coordinates: [
-                [102, 0],
-                [103, 1],
-                [104, 0],
-                [105, 1],
-            ],
-        };
-        t.deepEqual(JSON.parse(lines[1].geojson), lineObject, 'linestrings match');
-        t.end();
+test('geojson', async (t) => {
+    const { error, lines } = await collectAsync('geojson');
+    t.false(error, 'no err');
+    const lineObject = {
+        type: 'LineString',
+        coordinates: [
+            [102, 0],
+            [103, 1],
+            [104, 0],
+            [105, 1],
+        ],
     };
-
-    collect('geojson', verify);
+    t.deepEqual(JSON.parse(lines[1].geojson), lineObject, 'linestrings match');
 });
 
-test.cb('empty columns', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        /**
-         * Check that empty cells remain present as strings.
-         * @param {object} row - Parsed row to check.
-         */
-        function testLine(row) {
-            t.is(Object.keys(row).length, 3, 'Split into three columns');
-            t.truthy(/^2007-01-0\d$/.test(row.a), 'First column is a date');
-            t.truthy(row.b !== undefined, 'Empty column is in line');
-            t.is(row.b.length, 0, 'Empty column is empty');
-            t.truthy(row.c !== undefined, 'Empty column is in line');
-            t.is(row.c.length, 0, 'Empty column is empty');
-        }
-        for (const line of lines) testLine(line);
-        t.end();
-    };
-
-    collect('empty-columns', ['a', 'b', 'c'], verify);
+test('empty columns', async (t) => {
+    const { error, lines } = await collectAsync('empty-columns', ['a', 'b', 'c']);
+    t.false(error, 'no err');
+    /**
+     * Check that empty cells remain present as strings.
+     * @param {object} row - Parsed row to check.
+     */
+    function testLine(row) {
+        t.is(Object.keys(row).length, 3, 'Split into three columns');
+        t.truthy(/^2007-01-0\d$/.test(row.a), 'First column is a date');
+        t.truthy(row.b !== undefined, 'Empty column is in line');
+        t.is(row.b.length, 0, 'Empty column is empty');
+        t.truthy(row.c !== undefined, 'Empty column is in line');
+        t.is(row.c.length, 0, 'Empty column is empty');
+    }
+    for (const line of lines) testLine(line);
 });
 
-test.cb('csv-spectrum', (t) => {
-    spectrum((error, data) => {
-        if (error) throw error;
-        let pending = data.length;
-        for (const d of data) {
+test('csv-spectrum', async (t) => {
+    const data = await promisify(spectrum)();
+    const rows = await Promise.all(
+        data.map((d) => {
             const parser = csv();
-            const collector = concat((objs) => {
-                t.snapshot(objs, d.name);
-                done();
-            });
-            parser.pipe(collector);
-            parser.write(d.csv);
-            parser.end();
-        }
-        /**
-         *
-         */
-        function done() {
-            pending--;
-            if (pending === 0) t.end();
-        }
-    });
+            const collected = Array.fromAsync(parser);
+            parser.end(d.csv);
+            return collected;
+        }),
+    );
+    for (const [index, d] of data.entries()) {
+        const objs = rows[index];
+        t.snapshot(objs, d.name);
+    }
 });
 
-test.cb('process all rows', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.is(lines.length, 7268, '7268 rows');
-        t.end();
-    };
-
-    collect('large-dataset', {}, verify);
+test('process all rows', async (t) => {
+    const { error, lines } = await collectAsync('large-dataset', {});
+    t.false(error, 'no err');
+    t.is(lines.length, 7268, '7268 rows');
 });
 
 test('binary stanity', async (t) => {

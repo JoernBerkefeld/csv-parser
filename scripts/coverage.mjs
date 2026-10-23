@@ -39,7 +39,7 @@ const result = spawnSync(
         '--reporter=text',
         '--reporter=lcov',
         process.execPath,
-        'node_modules/ava/cli.js',
+        'node_modules/ava/entrypoints/cli.js',
     ],
     { stdio: 'inherit' },
 );

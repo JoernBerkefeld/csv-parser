@@ -403,6 +403,18 @@ test('coverage uses native V8 instrumentation for the ESM parser and CLI', () =>
     assert.match(coverage, /--clean=false/);
 });
 
+test('coverage invokes the installed AVA manifest CLI entrypoint', () => {
+    const ava = JSON.parse(
+        readFileSync(new URL('../node_modules/ava/package.json', import.meta.url), 'utf8'),
+    );
+    const entrypoint = `node_modules/ava/${ava.bin.ava.replace(/^\.\//, '')}`;
+    const coverage = readFileSync(new URL('coverage.mjs', import.meta.url), 'utf8');
+    assert.ok(coverage.includes(`'${entrypoint}'`));
+    const result = spawnSync(process.execPath, [entrypoint, '--version'], { encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), ava.version);
+});
+
 test('ESLint retains public stream overrides and inherited snapshot test names', async () => {
     const eslint = new ESLint();
     const config = await eslint.calculateConfigForFile('test/mapHeaders.test.js');

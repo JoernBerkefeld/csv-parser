@@ -1,5 +1,20 @@
 # Changelog
 
+## [4.0.7] — 2026-10-23
+
+### Development dependencies
+
+- Upgrade AVA from 3.15.0 to 8.1.1, migrate callback-based tests to awaited
+  checks, and update the coverage runner for AVA's current CLI entry point.
+- Convert snapshot containers to the current format while preserving all saved
+  expected values. Parser behavior, the native ESM API, CLI, declarations and
+  Node.js requirement are unchanged; runtime dependencies remain at zero.
+- Fresh audits against the same npm registry before and after the tooling
+  upgrade report development findings decreasing from five moderate findings
+  to zero. Production findings remain at zero. This comparison reflects the
+  advisories returned during that audit window, not historical audit totals
+  or a guarantee against future advisories.
+
 ## [4.0.6] — 2026-10-23
 
 ### Fixed

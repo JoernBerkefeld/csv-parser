@@ -1,25 +1,17 @@
 import test from 'ava';
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
-test.cb('comment', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines);
-        t.is(lines.length, 1, '1 row');
-        t.end();
-    };
-
-    collect('comment', { skipComments: true }, verify);
+test('comment', async (t) => {
+    const { error, lines } = await collectAsync('comment', { skipComments: true });
+    t.false(error, 'no err');
+    t.snapshot(lines);
+    t.is(lines.length, 1, '1 row');
 });
 
-test.cb('custom comment', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines);
-        t.is(lines.length, 1, '1 row');
-        t.end();
-    };
-
-    collect('option-comment', { skipComments: '~' }, verify);
+test('custom comment', async (t) => {
+    const { error, lines } = await collectAsync('option-comment', { skipComments: '~' });
+    t.false(error, 'no err');
+    t.snapshot(lines);
+    t.is(lines.length, 1, '1 row');
 });

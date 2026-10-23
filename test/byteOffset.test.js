@@ -1,7 +1,7 @@
 import test from 'ava';
 import csv from '../index.js';
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
 for (const separator of [',', '\t']) {
     test(`skipped multiline records retain original byte offsets (${JSON.stringify(separator)})`, async (t) => {
@@ -51,30 +51,22 @@ for (const separator of [',', '\t']) {
     });
 }
 
-test.cb('simple csv with byte offset', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.is(lines.length, 1, '1 row');
-        t.end();
-    };
-
-    collect('basic', { outputByteOffset: true }, verify);
+test('simple csv with byte offset', async (t) => {
+    const { error, lines } = await collectAsync('basic', { outputByteOffset: true });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.is(lines.length, 1, '1 row');
 });
 
-test.cb('large dataset with byte offset', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.is(lines.length, 7268, '7268 rows');
-        t.end();
-    };
-
-    collect('large-dataset', { outputByteOffset: true }, verify);
+test('large dataset with byte offset', async (t) => {
+    const { error, lines } = await collectAsync('large-dataset', { outputByteOffset: true });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.is(lines.length, 7268, '7268 rows');
 });
 
-test.cb('multibyte character set with byte offset', (t) => {
+test('multibyte character set with byte offset', async (t) => {
     const headers = Buffer.from('a\n');
     const cell1 = Buffer.from('this ʤ is multibyte1\n');
     const cell2 = Buffer.from('this ʤ is multibyte2\n');
@@ -89,16 +81,10 @@ test.cb('multibyte character set with byte offset', (t) => {
     parser.write(cell2);
     parser.end();
 
-    const lines = [];
-    parser.on('data', (data) => {
-        lines.push(data);
-    });
-    parser.on('end', () => {
-        t.is(lines.length, 2, '2 rows');
-        t.is(lines[0].row.a, expected1, 'multibyte character is preserved');
-        t.is(lines[0].byteOffset, 2, 'byte offset is correct');
-        t.is(lines[1].row.a, expected2, 'multibyte character is preserved');
-        t.is(lines[1].byteOffset, 24, 'byte offset is correct');
-        t.end();
-    });
+    const lines = await Array.fromAsync(parser);
+    t.is(lines.length, 2, '2 rows');
+    t.is(lines[0].row.a, expected1, 'multibyte character is preserved');
+    t.is(lines[0].byteOffset, 2, 'byte offset is correct');
+    t.is(lines[1].row.a, expected2, 'multibyte character is preserved');
+    t.is(lines[1].byteOffset, 24, 'byte offset is correct');
 });

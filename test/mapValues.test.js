@@ -108,9 +108,9 @@ for (const separator of [',', '\t']) {
     });
 }
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
-test.cb('map values', (t) => {
+test('map values', async (t) => {
     const headers = [];
     const indexes = [];
     const mapValues = ({ header, index, value }) => {
@@ -119,16 +119,12 @@ test.cb('map values', (t) => {
         return Math.trunc(Number(value));
     };
 
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.is(lines.length, 1, '1 row');
-        t.snapshot(headers, 'headers');
-        t.snapshot(indexes, 'indexes');
-        t.end();
-    };
-
-    collect('basic', { mapValues }, verify);
+    const { error, lines } = await collectAsync('basic', { mapValues });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.is(lines.length, 1, '1 row');
+    t.snapshot(headers, 'headers');
+    t.snapshot(indexes, 'indexes');
 });
 
 const mapEmptyValue = ({ value }) => {
@@ -136,18 +132,17 @@ const mapEmptyValue = ({ value }) => {
     return value === '' ? null : value;
 };
 
-test.cb('map last empty value', (t) => {
+test('map last empty value', async (t) => {
     const mapValues = mapEmptyValue;
 
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.is(lines.length, 2, '2 rows');
-        // eslint-disable-next-line unicorn/no-null -- Assert the callback's intentional null result, not undefined.
-        t.is(lines[0].name, null, 'name is mapped');
-        // eslint-disable-next-line unicorn/no-null -- Assert the callback's intentional null result, not undefined.
-        t.is(lines[0].location, null, 'last value mapped');
-        t.end();
-    };
-
-    collect('empty-columns', { mapValues, headers: ['date', 'name', 'location'] }, verify);
+    const { error, lines } = await collectAsync('empty-columns', {
+        mapValues,
+        headers: ['date', 'name', 'location'],
+    });
+    t.false(error, 'no err');
+    t.is(lines.length, 2, '2 rows');
+    // eslint-disable-next-line unicorn/no-null -- Assert the callback's intentional null result, not undefined.
+    t.is(lines[0].name, null, 'name is mapped');
+    // eslint-disable-next-line unicorn/no-null -- Assert the callback's intentional null result, not undefined.
+    t.is(lines[0].location, null, 'last value mapped');
 });

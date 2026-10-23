@@ -3,39 +3,27 @@ import { finished } from 'node:stream/promises';
 
 import csv from '../index.js';
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
-test.cb('custom escape character', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.snapshot(lines[2], 'third row');
-        t.is(lines.length, 3, '3 rows');
-        t.end();
-    };
-
-    collect('option-escape', { escape: '\\' }, verify);
+test('custom escape character', async (t) => {
+    const { error, lines } = await collectAsync('option-escape', { escape: '\\' });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.snapshot(lines[2], 'third row');
+    t.is(lines.length, 3, '3 rows');
 });
 
-test.cb('headers: false', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines);
-        t.end();
-    };
-
-    collect('no-headers', { headers: false }, verify);
+test('headers: false', async (t) => {
+    const { error, lines } = await collectAsync('no-headers', { headers: false });
+    t.false(error, 'no err');
+    t.snapshot(lines);
 });
 
-test.cb('headers option', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines);
-        t.end();
-    };
-
-    collect('headers', { headers: ['a', 'b', 'c'] }, verify);
+test('headers option', async (t) => {
+    const { error, lines } = await collectAsync('headers', { headers: ['a', 'b', 'c'] });
+    t.false(error, 'no err');
+    t.snapshot(lines);
 });
 
 for (const separator of [',', '\t']) {

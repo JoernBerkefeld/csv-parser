@@ -1,25 +1,17 @@
 import test from 'ava';
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
-test.cb('backtick separator (#105)', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines, 'lines');
-        t.is(lines.length, 2, '2 rows');
-        t.end();
-    };
-
-    collect('backtick', { separator: '`' }, verify);
+test('backtick separator (#105)', async (t) => {
+    const { error, lines } = await collectAsync('backtick', { separator: '`' });
+    t.false(error, 'no err');
+    t.snapshot(lines, 'lines');
+    t.is(lines.length, 2, '2 rows');
 });
 
-test.cb('strict + skipLines (#136)', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines, 'lines');
-        t.is(lines.length, 3, '4 rows');
-        t.end();
-    };
-
-    collect('strict+skipLines', { strict: true, skipLines: 1 }, verify);
+test('strict + skipLines (#136)', async (t) => {
+    const { error, lines } = await collectAsync('strict+skipLines', { strict: true, skipLines: 1 });
+    t.false(error, 'no err');
+    t.snapshot(lines, 'lines');
+    t.is(lines.length, 3, '4 rows');
 });

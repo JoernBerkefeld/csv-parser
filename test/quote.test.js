@@ -1,41 +1,32 @@
 import test from 'ava';
 
-import { collect } from './helpers/helper.js';
+import { collectAsync } from './helpers/helper.js';
 
-test.cb('custom quote character', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.is(lines.length, 2, '2 rows');
-        t.end();
-    };
-
-    collect('option-quote', { quote: "'" }, verify);
+test('custom quote character', async (t) => {
+    const { error, lines } = await collectAsync('option-quote', { quote: "'" });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.is(lines.length, 2, '2 rows');
 });
 
-test.cb('custom quote and escape character', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.snapshot(lines[2], 'third row');
-        t.is(lines.length, 3, '3 rows');
-        t.end();
-    };
-
-    collect('option-quote-escape', { quote: "'", escape: '\\' }, verify);
+test('custom quote and escape character', async (t) => {
+    const { error, lines } = await collectAsync('option-quote-escape', {
+        quote: "'",
+        escape: '\\',
+    });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.snapshot(lines[2], 'third row');
+    t.is(lines.length, 3, '3 rows');
 });
 
-test.cb('quote many', (t) => {
-    const verify = (error, lines) => {
-        t.false(error, 'no err');
-        t.snapshot(lines[0], 'first row');
-        t.snapshot(lines[1], 'second row');
-        t.snapshot(lines[2], 'third row');
-        t.is(lines.length, 3, '3 rows');
-        t.end();
-    };
-
-    collect('option-quote-many', { quote: "'" }, verify);
+test('quote many', async (t) => {
+    const { error, lines } = await collectAsync('option-quote-many', { quote: "'" });
+    t.false(error, 'no err');
+    t.snapshot(lines[0], 'first row');
+    t.snapshot(lines[1], 'second row');
+    t.snapshot(lines[2], 'third row');
+    t.is(lines.length, 3, '3 rows');
 });

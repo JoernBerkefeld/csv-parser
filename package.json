@@ -1,6 +1,6 @@
 {
     "name": "@joern.berkefeld/csv-parser",
-    "version": "4.0.6",
+    "version": "4.0.7",
     "description": "Native ESM streaming CSV parser fork with a default factory API and CLI",
     "type": "module",
     "license": "MIT",
@@ -51,7 +51,7 @@
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/node": "^22.20.5",
-        "ava": "^3.0.0",
+        "ava": "^8.1.1",
         "c8": "^12.0.0",
         "chalk": "^2.4.2",
         "concat-stream": "^2.0.0",

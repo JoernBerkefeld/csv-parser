@@ -32,6 +32,11 @@ factory; the `csv-parser` CLI name and TypeScript declarations are retained.
 Use `npm ci --no-workspaces`, `npm run lint:fix --no-workspaces`,
 `npm run lint --no-workspaces`, and `npm test --no-workspaces` in this repository._
 
+Version 4.0.7 updates development test tooling to AVA 8 and migrates callback
+checks and snapshot containers without changing their expected parser results.
+Runtime dependencies remain at zero; parser behavior, the API, CLI and Node.js
+requirement are unchanged.
+
 ## Benchmarks
 
 ⚡️ `csv-parser` is greased-lightning fast
