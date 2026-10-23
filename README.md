@@ -264,8 +264,12 @@ Instructs the parser to ignore lines which represent comments in a CSV file. Sin
 Type: `Number`<br>
 Default: `0`
 
-Specifies the number of lines at the beginning of a data file that the parser should
-skip over, prior to parsing headers.
+Specifies the number of CSV records at the beginning of a data file to discard
+before inferring headers or producing data with explicit headers or `headers: false`.
+Quoted multiline records count once; records ignored by `skipComments` do not count.
+Discarded records do not invoke `mapValues`. The inferred header record still uses
+`mapHeaders`, not `mapValues`. Record boundaries and `maxRowBytes` are enforced even
+for discarded records, and output byte offsets remain relative to the original input.
 
 #### maxRowBytes
 

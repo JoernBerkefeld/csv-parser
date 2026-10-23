@@ -3,6 +3,60 @@ import test from 'ava';
 import csv from '../index.js';
 
 for (const separator of [',', '\t']) {
+    for (const headers of [['amount', 'count'], false]) {
+        test(`skipLines bypasses rejecting numeric mapper (${JSON.stringify(separator)}, ${JSON.stringify(headers)})`, async (t) => {
+            for (const chunked of [false, true]) {
+                const calls = [];
+                const parser = csv({
+                    headers,
+                    separator,
+                    skipLines: 1,
+                    mapValues: (entry) => {
+                        calls.push(entry);
+                        if (!/^\d+$/.test(entry.value)) throw new Error('Not numeric');
+                        return Number(entry.value);
+                    },
+                });
+                const input = Buffer.from(
+                    `amount${separator}count\n12${separator}34\n56${separator}78`,
+                );
+                try {
+                    if (chunked) {
+                        for (const byte of input) parser.write(Buffer.from([byte]));
+                        parser.end();
+                    } else {
+                        parser.end(input);
+                    }
+                } catch (error) {
+                    t.fail(`Skipped header reached mapper: ${error.message}`);
+                    return;
+                }
+                t.deepEqual(
+                    await Array.fromAsync(parser),
+                    headers === false
+                        ? [
+                              { 0: 12, 1: 34 },
+                              { 0: 56, 1: 78 },
+                          ]
+                        : [
+                              { amount: 12, count: 34 },
+                              { amount: 56, count: 78 },
+                          ],
+                );
+                t.deepEqual(
+                    calls,
+                    ['12', '34', '56', '78'].map((value, index) => ({
+                        header: headers === false ? undefined : headers[index % 2],
+                        index: index % 2,
+                        value,
+                    })),
+                );
+            }
+        });
+    }
+}
+
+for (const separator of [',', '\t']) {
     test(`object-mapped explicit special headers cannot replace row prototypes (${JSON.stringify(separator)})`, async (t) => {
         const globalProperties = Object.getOwnPropertyDescriptors(Object.prototype);
         const mapped = { marker: 'synthetic mapped value' };

@@ -1,5 +1,14 @@
 # Changelog
 
+## [4.0.6] — 2026-10-23
+
+### Fixed
+
+- Discard `skipLines` records before invoking `mapValues`, so explicit-header and
+  headerless numeric mappings no longer process skipped header or preamble text.
+  Comment counting, inferred headers, quoted multiline record boundaries, record
+  size limits and original-input byte offsets are unchanged.
+
 ## [4.0.5] — 2026-10-23
 
 ### Fixed

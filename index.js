@@ -147,17 +147,21 @@ class CsvParser extends Transform {
             end--;
         }
 
-        const comma = separator;
-        const cells = [];
-        let isQuoted = false;
-        let offset = start;
-
         if (skipComments) {
             const char = typeof skipComments === 'string' ? skipComments : '#';
             if (buffer[start] === Buffer.from(char)[0]) {
                 return;
             }
         }
+
+        const skip = skipLines && skipLines > this.state.lineNumber;
+        this.state.lineNumber++;
+        if (skip) return;
+
+        const comma = separator;
+        const cells = [];
+        let isQuoted = false;
+        let offset = start;
 
         const mapValue = (value) => {
             if (this.state.first) {
@@ -208,10 +212,7 @@ class CsvParser extends Transform {
             cells.push(mapValue(this.state.empty));
         }
 
-        const skip = skipLines && skipLines > this.state.lineNumber;
-        this.state.lineNumber++;
-
-        if (!skip && this.state.first) {
+        if (this.state.first) {
             this.state.first = false;
             this.headers = cells.map((header, index) => {
                 const mapped = mapHeaders({
@@ -229,14 +230,12 @@ class CsvParser extends Transform {
             return;
         }
 
-        if (!skip && this.options.strict && cells.length !== this.headers.length) {
+        if (this.options.strict && cells.length !== this.headers.length) {
             const error = new RangeError('Row length does not match headers');
             this.emit('error', error);
         } else {
-            if (!skip) {
-                const byteOffset = this.bytesRead - buffer.length + start;
-                this.writeRow(cells, byteOffset);
-            }
+            const byteOffset = this.bytesRead - buffer.length + start;
+            this.writeRow(cells, byteOffset);
         }
     }
 

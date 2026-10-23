@@ -3,6 +3,54 @@ import csv from '../index.js';
 
 import { collect } from './helpers/helper.js';
 
+for (const separator of [',', '\t']) {
+    test(`skipped multiline records retain original byte offsets (${JSON.stringify(separator)})`, async (t) => {
+        for (const headers of [undefined, ['name', 'count'], false]) {
+            for (const chunked of [false, true]) {
+                const calls = [];
+                const prefix = `# comment\r\n"discard\r\nʤ"${separator}text\r\n`;
+                const header = headers === undefined ? `name${separator}count\r\n` : '';
+                const first = `ʤ${separator}12\r\n`;
+                const parser = csv({
+                    ...(headers !== undefined && { headers }),
+                    separator,
+                    skipComments: true,
+                    skipLines: 1,
+                    outputByteOffset: true,
+                    mapValues: (entry) => {
+                        calls.push(entry);
+                        return entry.value;
+                    },
+                });
+                const input = Buffer.from(`${prefix}${header}${first}next${separator}34`);
+                if (chunked) {
+                    for (const byte of input) parser.write(Buffer.from([byte]));
+                    parser.end();
+                } else {
+                    parser.end(input);
+                }
+                t.deepEqual(await Array.fromAsync(parser), [
+                    {
+                        row: headers === false ? { 0: 'ʤ', 1: '12' } : { name: 'ʤ', count: '12' },
+                        byteOffset: Buffer.byteLength(prefix + header),
+                    },
+                    {
+                        row:
+                            headers === false
+                                ? { 0: 'next', 1: '34' }
+                                : { name: 'next', count: '34' },
+                        byteOffset: Buffer.byteLength(prefix + header + first),
+                    },
+                ]);
+                t.deepEqual(
+                    calls.map(({ value }) => value),
+                    ['ʤ', '12', 'next', '34'],
+                );
+            }
+        }
+    });
+}
+
 test.cb('simple csv with byte offset', (t) => {
     const verify = (error, lines) => {
         t.false(error, 'no err');
