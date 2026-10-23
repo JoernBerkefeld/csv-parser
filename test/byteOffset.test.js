@@ -1,5 +1,4 @@
 import test from 'ava';
-import bops from 'bops';
 import csv from '../index.js';
 
 import { collect } from './helpers/helper.js';
@@ -28,9 +27,11 @@ test.cb('large dataset with byte offset', (t) => {
 });
 
 test.cb('multibyte character set with byte offset', (t) => {
-    const headers = bops.from('a\n');
-    const cell1 = bops.from('this ʤ is multibyte1\n');
-    const cell2 = bops.from('this ʤ is multibyte2\n');
+    const headers = Buffer.from('a\n');
+    const cell1 = Buffer.from('this ʤ is multibyte1\n');
+    const cell2 = Buffer.from('this ʤ is multibyte2\n');
+    t.true(Buffer.isBuffer(cell1));
+    t.deepEqual([...Buffer.from('ʤ')], [0xca, 0xa4], 'native conversion preserves UTF-8 bytes');
     const expected1 = 'this ʤ is multibyte1';
     const expected2 = 'this ʤ is multibyte2';
     const parser = csv({ outputByteOffset: true });

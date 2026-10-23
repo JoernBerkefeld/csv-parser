@@ -1,16 +1,13 @@
 #!/usr/bin/env node
-import loudRejection from 'loud-rejection';
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import globby from 'globby';
 import chalk from 'chalk';
 import table from 'text-table';
-import timeSpan from 'time-span';
+import { performance } from 'node:perf_hooks';
 import strip from 'strip-ansi';
 
 import csv from '../index.js';
-
-loudRejection();
 
 const run = async () => {
     const paths = process.argv[2] || (await globby(['test/fixtures/**/*.csv']));
@@ -20,7 +17,7 @@ const run = async () => {
     for (const filePath of filePaths) {
         await new Promise((resolve) => {
             let rowsParsed = 0;
-            const end = timeSpan();
+            const start = performance.now();
             const data = [];
             createReadStream(filePath)
                 .pipe(csv())
@@ -29,7 +26,7 @@ const run = async () => {
                     data.push(line);
                 })
                 .on('finish', () => {
-                    const duration = end().toPrecision(2);
+                    const duration = (performance.now() - start).toPrecision(2);
                     const color = duration <= 10 ? 'green' : duration > 100 ? 'red' : 'yellow';
                     const fileName = chalk.blue(path.basename(filePath));
                     rows.push(['', fileName, rowsParsed, chalk[color](`${duration}ms`)]);

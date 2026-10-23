@@ -1,10 +1,73 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
+
+test('benchmark preserves row counts and two-significant-digit millisecond output', () => {
+    const temporaryDirectories = {
+        TEMP: process.env.TEMP,
+        NODE: os.tmpdir(),
+        TMP: process.env.TMP,
+        TMPDIR: process.env.TMPDIR,
+    };
+    for (const [name, value] of Object.entries(temporaryDirectories)) {
+        if (!value && (name === 'TMP' || name === 'TMPDIR')) continue;
+        assert.ok(value && path.isAbsolute(value), `${name} must be absolute`);
+        assert.equal(
+            path
+                .resolve(value)
+                .replace(/[\\/]+$/, '')
+                .toLowerCase(),
+            String.raw`f:\temp`,
+        );
+    }
+    const root = mkdtempSync(path.join(os.tmpdir(), 'csv-benchmark-test-'));
+    writeFileSync(path.join(root, '.run-owner'), randomUUID());
+    const input = path.join(root, 'synthetic.csv');
+    const loader = path.join(root, 'reject-globby.mjs');
+    writeFileSync(path.join(root, 'registered.json'), JSON.stringify([input, loader]));
+    writeFileSync(input, 'name,value\nalpha,1\nbeta,2\n');
+    const bench = fileURLToPath(new URL('../bin/bench', import.meta.url));
+    const environment = { ...process.env, FORCE_COLOR: '0', NODE_OPTIONS: '' };
+    const successful = spawnSync(process.execPath, [bench, input], {
+        encoding: 'utf8',
+        env: environment,
+    });
+    assert.equal(successful.status, 0, successful.stderr);
+    assert.match(successful.stdout, /Filename\s+Rows Parsed\s+Duration/);
+    const match = successful.stdout.match(/synthetic\.csv\s+2\s+(\S+)ms/);
+    assert.ok(match, successful.stdout);
+    assert.ok(Number(match[1]) >= 0);
+    assert.equal(Number(match[1]).toPrecision(2), match[1]);
+
+    // Reject genuinely asynchronous benchmark discovery, not an uncaught stream error.
+    writeFileSync(
+        loader,
+        `export async function resolve(specifier, context, nextResolve) {
+            if (specifier === 'globby') return {
+                url: 'data:text/javascript,' + encodeURIComponent('export default async () => { await Promise.resolve(); throw new Error("synthetic benchmark rejection"); }'),
+                shortCircuit: true
+            };
+            return nextResolve(specifier, context);
+        }\n`,
+    );
+    const bootstrap = `import { register } from 'node:module'; register(${JSON.stringify(pathToFileURL(loader).href)});`;
+    const rejected = spawnSync(
+        process.execPath,
+        ['--import', `data:text/javascript,${encodeURIComponent(bootstrap)}`, bench],
+        { encoding: 'utf8', env: environment },
+    );
+    assert.equal(rejected.status, 1, rejected.stderr);
+    assert.match(rejected.stderr, /synthetic benchmark rejection/);
+    assert.doesNotMatch(rejected.stdout, /Rows Parsed/);
+});
 
 const publishWorkflow = readFileSync(
     new URL('../.github/workflows/npm-publish.yml', import.meta.url),

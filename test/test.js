@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url';
 
 import test from 'ava';
-import bops from 'bops';
 import spectrum from 'csv-spectrum';
 import concat from 'concat-stream';
 import execa from 'execa';
@@ -76,8 +75,8 @@ test.cb('raw escaped quotes and newlines', (t) => {
 });
 
 test.cb('line with comma in quotes', (t) => {
-    const headers = bops.from('a,b,c,d,e\n');
-    const line = bops.from('John,Doe,120 any st.,"Anytown, WW",08123\n');
+    const headers = Buffer.from('a,b,c,d,e\n');
+    const line = Buffer.from('John,Doe,120 any st.,"Anytown, WW",08123\n');
     const correct = JSON.stringify({
         a: 'John',
         b: 'Doe',
@@ -98,8 +97,8 @@ test.cb('line with comma in quotes', (t) => {
 });
 
 test.cb('line with newline in quotes', (t) => {
-    const headers = bops.from('a,b,c\n');
-    const line = bops.from(`1,"ha ${eol}""ha"" ${eol}ha",3\n`);
+    const headers = Buffer.from('a,b,c\n');
+    const line = Buffer.from(`1,"ha ${eol}""ha"" ${eol}ha",3\n`);
     const correct = JSON.stringify({ a: '1', b: `ha ${eol}"ha" ${eol}ha`, c: '3' });
     const parser = csv();
 
@@ -114,8 +113,8 @@ test.cb('line with newline in quotes', (t) => {
 });
 
 test.cb('cell with comma in quotes', (t) => {
-    const headers = bops.from('a\n');
-    const cell = bops.from('"Anytown, WW"\n');
+    const headers = Buffer.from('a\n');
+    const cell = Buffer.from('"Anytown, WW"\n');
     const correct = 'Anytown, WW';
     const parser = csv();
 
@@ -130,8 +129,8 @@ test.cb('cell with comma in quotes', (t) => {
 });
 
 test.cb('cell with newline', (t) => {
-    const headers = bops.from('a\n');
-    const cell = bops.from(`"why ${eol}hello ${eol}there"\n`);
+    const headers = Buffer.from('a\n');
+    const cell = Buffer.from(`"why ${eol}hello ${eol}there"\n`);
     const correct = `why ${eol}hello ${eol}there`;
     const parser = csv();
 
@@ -146,8 +145,8 @@ test.cb('cell with newline', (t) => {
 });
 
 test.cb('cell with escaped quote in quotes', (t) => {
-    const headers = bops.from('a\n');
-    const cell = bops.from('"ha ""ha"" ha"\n');
+    const headers = Buffer.from('a\n');
+    const cell = Buffer.from('"ha ""ha"" ha"\n');
     const correct = 'ha "ha" ha';
     const parser = csv();
 
@@ -162,8 +161,8 @@ test.cb('cell with escaped quote in quotes', (t) => {
 });
 
 test.cb('cell with multibyte character', (t) => {
-    const headers = bops.from('a\n');
-    const cell = bops.from('this ʤ is multibyte\n');
+    const headers = Buffer.from('a\n');
+    const cell = Buffer.from('this ʤ is multibyte\n');
     const correct = 'this ʤ is multibyte';
     const parser = csv();
 

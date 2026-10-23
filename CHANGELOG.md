@@ -1,5 +1,24 @@
 # Changelog
 
+## [4.0.2] — 2026-10-23
+
+### Development dependencies
+
+- Replace test-only `bops` with native `Buffer.from`, benchmark timing via
+  `time-span` with `performance.now()`, and `loud-rejection` with Node.js default
+  unhandled-rejection behavior. Direct development dependencies decrease from
+  24 to 21; runtime dependencies remain at zero.
+- Update eight compatible transitive development dependencies:
+  `brace-expansion`, `fast-glob`, `http-cache-semantics`, `js-yaml`, `lodash`,
+  `minimatch`, `picomatch` and `semver`. The measured development audit decreases
+  from 19 findings (4 moderate, 15 high) to 12 (4 moderate, 8 high); the production
+  audit reports zero findings. Remaining development findings are not resolved
+  by this maintenance work.
+
+Parser behavior, the native ESM API, CLI, declarations and Node.js requirement
+are unchanged. This release contains development-dependency maintenance, not
+additional parser fixes.
+
 ## [4.0.1] — 2026-10-23
 
 ### Fixed
