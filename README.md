@@ -212,7 +212,7 @@ csv({
 
 **header** _String_ The current column header.<br/>
 **index** _Number_ The current column index.<br/>
-**value** _String_ The current column value (or content).
+**value** _String | Buffer_ The current column value (or content); a `Buffer` when `raw: true`.
 
 ##### newline
 
@@ -232,7 +232,11 @@ Specifies a single-character string to denote a quoted string.
 
 Type: `Boolean`<br>
 
-If `true`, instructs the parser not to decode UTF-8 strings.
+If `true`, data cells remain `Buffer` values instead of being decoded as UTF-8
+strings, including empty cells. Inferred headers are still decoded as UTF-8
+strings before `mapHeaders` and sanitization, so row keys and header callbacks
+use the same names as in non-raw mode. Duplicate retained headers are rejected in
+raw mode too. Explicit headers and `headers: false` keep their existing behavior.
 
 #### separator
 

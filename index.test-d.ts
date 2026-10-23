@@ -36,6 +36,21 @@ expectType<csvParser.CsvParser>(csvParser({ mapValues: ({ header, index, value }
 expectType<csvParser.CsvParser>(csvParser({ newline: '\n' }));
 expectType<csvParser.CsvParser>(csvParser({ quote: '"' }));
 expectType<csvParser.CsvParser>(csvParser({ raw: true }));
+expectType<csvParser.CsvParser>(
+    csvParser({
+        raw: true,
+        mapHeaders: ({ header, index }) => {
+            expectType<string>(header);
+            expectType<number>(index);
+            return header.toLowerCase();
+        },
+        mapValues: ({ header, value }) => {
+            expectType<string>(header);
+            expectType<any>(value);
+            return value;
+        },
+    }),
+);
 expectType<csvParser.CsvParser>(csvParser({ separator: ',' }));
 expectType<csvParser.CsvParser>(csvParser({ skipComments: true }));
 expectType<csvParser.CsvParser>(csvParser({ skipComments: '#' }));

@@ -39,6 +39,62 @@ test.cb('headers option', (t) => {
 });
 
 for (const separator of [',', '\t']) {
+    test(`raw inferred headers are strings with Buffer values (${JSON.stringify(separator)})`, async (t) => {
+        const input = Buffer.from(`"naïve"${separator}empty\r\nΔelta${separator}`);
+        for (const chunks of [[input], [...input].map((byte) => Buffer.from([byte]))]) {
+            const parser = csv({ raw: true, separator });
+            const observedHeaders = [];
+            parser.on('headers', (headers) => {
+                observedHeaders.push(headers);
+            });
+            for (const chunk of chunks) parser.write(chunk);
+            parser.end();
+            t.deepEqual(await Array.fromAsync(parser), [
+                { naïve: Buffer.from('Δelta'), empty: Buffer.alloc(0) },
+            ]);
+            t.deepEqual(observedHeaders, [['naïve', 'empty']]);
+        }
+
+        const parser = csv({ raw: true, separator });
+        const observedHeaders = [];
+        parser.on('headers', (headers) => {
+            observedHeaders.push(headers);
+        });
+        parser.end(`naïve${separator}empty`);
+        t.deepEqual(await Array.fromAsync(parser), []);
+        t.deepEqual(observedHeaders, [['naïve', 'empty']]);
+    });
+
+    test(`raw inferred duplicate headers remain terminal (${JSON.stringify(separator)})`, async (t) => {
+        for (const input of [
+            `name${separator}name\none${separator}two\nthree${separator}four`,
+            `name${separator}name`,
+            `${separator}\nleft${separator}right`,
+        ]) {
+            const parser = csv({ raw: true, separator });
+            const rows = [];
+            const errors = [];
+            const headers = [];
+            parser.on('data', (row) => {
+                rows.push(row);
+            });
+            parser.on('error', (error) => {
+                errors.push(error);
+            });
+            parser.on('headers', (value) => {
+                headers.push(value);
+            });
+            const completion = finished(parser);
+            for (const byte of Buffer.from(input)) parser.write(Buffer.from([byte]));
+            parser.end();
+            await t.throwsAsync(completion, { instanceOf: Error });
+            t.deepEqual(rows, []);
+            t.deepEqual(headers, []);
+            t.is(errors.length, 1);
+            t.true(parser.destroyed);
+        }
+    });
+
     test(`explicit duplicate headers fail before parsing (${JSON.stringify(separator)})`, (t) => {
         for (const headers of [
             ['name', 'name'],

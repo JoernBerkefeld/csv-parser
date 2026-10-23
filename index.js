@@ -214,7 +214,10 @@ class CsvParser extends Transform {
         if (!skip && this.state.first) {
             this.state.first = false;
             this.headers = cells.map((header, index) => {
-                const mapped = mapHeaders({ header, index });
+                const mapped = mapHeaders({
+                    header: this.options.raw ? header.toString('utf8') : header,
+                    index,
+                });
 
                 return sanitizeHeader(mapped);
             });

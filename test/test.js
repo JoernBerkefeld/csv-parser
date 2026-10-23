@@ -11,6 +11,20 @@ import { collect } from './helpers/helper.js';
 
 const eol = '\n';
 
+for (const separator of [',', '\t']) {
+    test(`raw explicit and false headers preserve data (${JSON.stringify(separator)})`, async (t) => {
+        for (const headers of [['name', 'empty'], false]) {
+            const parser = csv({ raw: true, separator, headers });
+            parser.end(`Δelta${separator}\nnext${separator}`);
+            const keys = headers || ['0', '1'];
+            t.deepEqual(await Array.fromAsync(parser), [
+                { [keys[0]]: Buffer.from('Δelta'), [keys[1]]: Buffer.alloc(0) },
+                { [keys[0]]: Buffer.from('next'), [keys[1]]: Buffer.alloc(0) },
+            ]);
+        }
+    });
+}
+
 test.cb('simple csv', (t) => {
     const verify = (error, lines) => {
         t.false(error, 'no err');

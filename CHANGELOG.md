@@ -1,5 +1,15 @@
 # Changelog
 
+## [4.0.4] — 2026-10-23
+
+### Fixed
+
+- Decode inferred headers as UTF-8 strings in raw mode before header mapping and
+  sanitization, restoring named row properties while preserving Buffer-valued
+  data cells, including Unicode and empty values. Header callbacks receive
+  strings; duplicate rejection and dangerous inferred-header removal still
+  apply. Explicit headers and `headers: false` are unchanged.
+
 ## [4.0.3] — 2026-10-23
 
 ### Fixed
