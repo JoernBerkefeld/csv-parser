@@ -10,29 +10,26 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
 
-/**
- * Validate temporary placement before creating benchmark fixtures.
- * @param {string} platform - Runtime platform.
- * @param {object} directories - Environment overrides and actual Node temporary directory.
- * @returns {void} Throws if any directory is unsafe.
- */
-function validateTemporaryDirectories(platform, directories) {
-    const isWindows = platform === 'win32';
-    const paths = isWindows ? path.win32 : path.posix;
-    const expected = isWindows ? String.raw`f:\temp` : '/tmp';
-    for (const [name, value] of Object.entries(directories)) {
-        if (!value && name !== 'NODE' && (!isWindows || name !== 'TEMP')) continue;
-        assert.ok(value && paths.isAbsolute(value), `${name} must be absolute`);
-        const normalized = paths.normalize(value).replace(/[\\/]+$/, '');
-        assert.equal(isWindows ? normalized.toLowerCase() : normalized, expected, name);
-    }
-}
+import { validateTemporaryDirectories } from '../test/helpers/temporary-directories.js';
 
 test('temporary placement validates Windows and Linux without depending on the host', () => {
     const windows = { TEMP: String.raw`F:\Temp`, NODE: 'f:/temp/' };
     const linux = { NODE: '/tmp', TEMP: undefined, TMP: '', TMPDIR: '/tmp/' };
     assert.doesNotThrow(() => validateTemporaryDirectories('win32', windows));
     assert.doesNotThrow(() => validateTemporaryDirectories('linux', linux));
+    for (const value of [undefined, '']) {
+        assert.doesNotThrow(() =>
+            validateTemporaryDirectories('win32', { ...windows, TMP: value, TMPDIR: value }),
+        );
+        assert.doesNotThrow(() =>
+            validateTemporaryDirectories('linux', {
+                NODE: '/tmp',
+                TEMP: value,
+                TMP: value,
+                TMPDIR: value,
+            }),
+        );
+    }
     for (const name of ['TEMP', 'NODE', 'TMP', 'TMPDIR']) {
         for (const value of [
             'F:',

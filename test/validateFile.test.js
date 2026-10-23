@@ -8,28 +8,18 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import test from 'ava';
 import csv, { validateFile } from '../index.js';
+import { validateTemporaryDirectories } from './helpers/temporary-directories.js';
 
 const state = {};
 // eslint-disable-next-line unicorn/no-null -- Assert the public null header and removed-column contracts.
 const absent = null;
 test.before(async () => {
-    const locations = {
+    validateTemporaryDirectories(process.platform, {
         TEMP: process.env.TEMP,
         NODE: os.tmpdir(),
         TMP: process.env.TMP,
         TMPDIR: process.env.TMPDIR,
-    };
-    for (const [name, value] of Object.entries(locations)) {
-        if (!value && (name === 'TMP' || name === 'TMPDIR')) continue;
-        if (
-            !path.isAbsolute(value) ||
-            path
-                .resolve(value)
-                .replace(/[\\/]+$/, '')
-                .toLowerCase() !== String.raw`f:\temp`
-        )
-            throw new Error('Unsafe temporary directory');
-    }
+    });
     state.root = await mkdtemp(path.join(os.tmpdir(), 'csv-validate-'));
     await writeFile(path.join(state.root, 'owner'), randomUUID());
 });
