@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
@@ -86,6 +87,46 @@ test('npm publish normalization retains the CLI without metadata autocorrections
     assert.equal(lock.name, package_.content.name);
     assert.equal(lock.packages[''].name, package_.content.name);
     assert.deepEqual(lock.packages[''].bin, package_.content.bin);
+});
+
+test('release inventory guard matches the real pack manifest and rejects drift', () => {
+    assert.ok(process.env.npm_execpath, 'Run tooling tests through npm test');
+    const manifest = execFileSync(
+        process.execPath,
+        [process.env.npm_execpath, 'pack', '--dry-run', '--json', '--no-workspaces'],
+        { cwd: new URL('../', import.meta.url), encoding: 'utf8' },
+    );
+    const [pack] = JSON.parse(manifest);
+    const inventorySource = publishWorkflow
+        .split('            - name: Check package contents\n', 2)[1]
+        .split("                  node <<'NODE'\n", 2)[1]
+        .split('\n                  NODE', 1)[0];
+    const checkInventory = (files) =>
+        runInNewContext(inventorySource, {
+            require: (specifier) => {
+                if (specifier === 'node:assert/strict') return assert;
+                assert.equal(specifier, 'node:child_process');
+                return {
+                    execFileSync: (command, arguments_) => {
+                        assert.equal(command, 'npm');
+                        assert.deepEqual(
+                            [...arguments_],
+                            ['pack', '--dry-run', '--json', '--no-workspaces'],
+                        );
+                        return JSON.stringify([{ ...pack, files }]);
+                    },
+                };
+            },
+        });
+    assert.doesNotThrow(() => checkInventory(pack.files));
+    assert.throws(
+        () => checkInventory(pack.files.filter((file) => file.path !== 'CHANGELOG.md')),
+        /Unexpected or missing published files/,
+    );
+    assert.throws(
+        () => checkInventory([...pack.files, { path: 'unexpected.txt' }]),
+        /Unexpected or missing published files/,
+    );
 });
 
 test('CI and release verification cover exact supported Node boundaries', () => {

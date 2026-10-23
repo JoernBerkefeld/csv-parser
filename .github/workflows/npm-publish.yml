@@ -59,7 +59,7 @@ jobs:
                   const assert = require('node:assert/strict');
                   const { execFileSync } = require('node:child_process');
                   const [pack] = JSON.parse(execFileSync('npm', ['pack', '--dry-run', '--json', '--no-workspaces'], { encoding: 'utf8' }));
-                  const expected = ['LICENSE', 'README.md', 'bin/csv-parser', 'index.d.ts', 'index.js', 'package.json'];
+                  const expected = ['CHANGELOG.md', 'LICENSE', 'README.md', 'bin/csv-parser', 'index.d.ts', 'index.js', 'package.json'];
                   assert.deepEqual(pack.files.map(file => file.path).sort(), expected.sort(), 'Unexpected or missing published files');
                   NODE
             - name: Publish exact version or skip if already published
