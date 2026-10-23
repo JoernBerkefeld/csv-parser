@@ -47,8 +47,10 @@ for (const separator of [',', '\t']) {
         const expected = [values, next].map((row) =>
             Object.fromEntries(headers.map((header, index) => [header, row[index]])),
         );
-        for (const chunks of layouts(text))
+        for (const chunks of layouts(text)) {
             t.deepEqual(await parse(chunks, { separator }), expected);
+            t.deepEqual(await parse(chunks, { separator, strictQuotes: true }), expected);
+        }
     });
 
     test(`${label}: terminal custom escape preserves the baseline malformed quoted EOF row`, async (t) => {
@@ -186,5 +188,8 @@ test('malformed field-start quote and trailing-data behavior remains characteriz
         ['a,b\n"a""\n', [{ a: '"a"\n' }]],
         ['a,b\n"a\\', [{ a: '"a\\' }]],
     ];
-    for (const [text, expected] of cases) t.deepEqual(await parse([Buffer.from(text)]), expected);
+    for (const [text, expected] of cases) {
+        t.deepEqual(await parse([Buffer.from(text)]), expected);
+        t.deepEqual(await parse([Buffer.from(text)], { strictQuotes: false }), expected);
+    }
 });

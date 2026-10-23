@@ -37,6 +37,9 @@ checks and snapshot containers without changing their expected parser results.
 Runtime dependencies remain at zero; parser behavior, the API, CLI and Node.js
 requirement are unchanged.
 
+Version 4.1.0 adds `validateFile` and opt-in `strictQuotes`, while preserving
+the default factory API and permissive quote handling unless explicitly enabled.
+
 ## Benchmarks
 
 ⚡️ `csv-parser` is greased-lightning fast
@@ -294,6 +297,22 @@ if `false`: the headers are mapped to the column index
 less columns: any missing column in the middle will result in a wrong property mapping!
 more columns: the aditional columns will create a "_"+index properties - eg. "_10":"value"
 
+#### strictQuotes
+
+Type: `Boolean`<br>
+Default: `false`
+
+Reject unterminated quoted fields (including an unfinished custom escape at
+quoted EOF) and characters after a closing quote other than the configured
+separator or record ending. A properly closed final field needs no final
+newline. Literal quotes inside unquoted fields remain data. This is a narrow
+opt-in quote check, not a general RFC-compliance mode.
+
+`strictQuotes` and `strict` are independent and default to `false` in both the
+parser factory and `validateFile`. Use `{ strict: true, strictQuotes: true }` for
+both column-count and quote checks. `headers: false` disables column-count
+checking even with `strict: true`, but does not disable `strictQuotes`.
+
 #### outputByteOffset
 
 Type: `Boolean`<br>
@@ -302,6 +321,81 @@ Default: `false`
 If `true`, instructs the parser to emit each row with a `byteOffset` property.
 The byteOffset represents the offset in bytes of the beginning of the parsed row in the original stream.
 Will change the output format of stream to be `{ byteOffset, row }`.
+
+### validateFile(path, optionsOrHeaders?)
+
+Named ESM export, alongside the unchanged default parser factory. Accepts a
+**string filesystem path** and the same parser options or readonly header-array
+shorthand as the factory. Returns a `Promise<{ headers, recordCount }>` after
+reading the whole file successfully, or rejects on the first failure.
+
+- `headers` is a copied `(string | null)[]` of effective inferred names (after
+  `mapHeaders` and sanitization, retaining `null` removed-column positions), a
+  copy of explicit headers, `false` for positional `headers: false`, or `null`
+  when no header was inferred. `mapHeaders` only runs for inferred headers;
+  explicit headers are not remapped.
+- `recordCount` counts emitted **data records**, excluding inferred headers,
+  skipped records and comments. `outputByteOffset` does not change the count.
+  Empty files succeed with zero records and `headers: null` by default, or the
+  supplied explicit headers / `false` in those modes. Header-only files succeed
+  with inferred headers and zero records. Callers decide whether zero is allowed.
+- All parser settings apply, including TSV `separator: '\t'`, quote/escape,
+  newline, skips, `raw`, `maxRowBytes`, mappings and byte-offset output. There is
+  no automatic strictness, BOM removal or nonempty-file policy. Duplicate
+  retained headers are rejected by the same parser rules.
+- Mappings execute during validation exactly as during parsing. They execute
+  **again** on a later import; equivalent results assume deterministic callbacks.
+  Options and header arrays are copied, not modified in place.
+- Rejections are readable `Error` objects whose message includes the supplied
+  path and reason. `cause` retains the underlying error, and filesystem `code`
+  is retained when available (for example `ENOENT`). Mapping exceptions also
+  reject the promise; non-Error throws are wrapped. Errors do not invent physical
+  line or record numbers.
+
+The helper streams through the **same parser**, draining and counting rows
+without retaining them, caching a verdict or making a second scanner. Memory is
+bounded by stream buffering and the current record, not total record count;
+choose `maxRowBytes` to constrain exceptionally large records. It does not copy
+or snapshot the input, check file identity, or guarantee unchanged source bytes
+between validation and import. It is not a transaction, rollback mechanism or
+guarantee that a later read or remote upload will succeed.
+
+For a consumer that requires nonempty input, validate **before** destructive
+CLEAR or upload operations, then import with the **same** options. This general
+pattern does not add preflight safety to Data Loader; its adoption is deferred.
+The caller-supplied operations below stand for application-specific effects:
+
+```js
+import csv, { validateFile } from '@joern.berkefeld/csv-parser';
+import { createReadStream } from 'node:fs';
+import { Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+
+async function importValidatedFile(path, clearDestination, uploadRow) {
+    const options = { strict: true, strictQuotes: true };
+    const { recordCount } = await validateFile(path, options);
+    if (recordCount === 0) throw new Error('No data records to import');
+
+    // Validation finished before either destructive or upload operation.
+    await clearDestination();
+    await pipeline(
+        createReadStream(path),
+        csv(options),
+        new Writable({
+            objectMode: true,
+            write(row, encoding, callback) {
+                Promise.resolve()
+                    .then(() => uploadRow(row))
+                    .then(() => callback(), callback);
+            },
+        }),
+    );
+}
+```
+
+For multiple files or targets, validate **all** selected inputs before the first
+CLEAR or upload anywhere in the job. The example assumes the source remains
+unchanged between passes; failures after CLEAR can still leave partial effects.
 
 ## Events
 

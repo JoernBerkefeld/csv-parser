@@ -109,6 +109,14 @@ Bugs Bunny,22
         readonly strict?: boolean;
 
         /**
+         * Reject unterminated quoted fields and invalid characters after closing quotes.
+         * Literal quotes in unquoted fields remain data. Independent of column-count strictness.
+         *
+         * @default false
+         */
+        readonly strictQuotes?: boolean;
+
+        /**
          * If `true`, instructs the parser to emit each row with a `byteOffset` property.
          * The byteOffset represents the offset in bytes of the beginning of the parsed row in the original stream.
          * Will change the output format of stream to be `{ byteOffset, row }`.
@@ -149,5 +157,16 @@ Bugs Bunny,22
 declare const csvParser: (
     optionsOrHeaders?: csvParser.Options | ReadonlyArray<string>,
 ) => csvParser.CsvParser;
+
+export interface ValidationResult {
+    headers: (string | null)[] | false | null;
+    recordCount: number;
+}
+
+/** Stream the whole file with the same options as the default parser, without retaining rows. */
+export declare function validateFile(
+    filePath: string,
+    optionsOrHeaders?: csvParser.Options | ReadonlyArray<string>,
+): Promise<ValidationResult>;
 
 export default csvParser;

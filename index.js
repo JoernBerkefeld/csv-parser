@@ -1,4 +1,6 @@
-import { Transform } from 'node:stream';
+import { createReadStream } from 'node:fs';
+import { Transform, Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const [cr] = Buffer.from('\r');
 const [nl] = Buffer.from('\n');
@@ -17,6 +19,7 @@ const defaults = {
     skipLines: null,
     maxRowBytes: Number.MAX_SAFE_INTEGER,
     strict: false,
+    strictQuotes: false,
     outputByteOffset: false,
 };
 
@@ -83,6 +86,7 @@ class CsvParser extends Transform {
             malformedQuoted: false,
             pendingQuote: false,
             pendingCr: false,
+            afterQuote: false,
         };
 
         // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
@@ -269,7 +273,15 @@ class CsvParser extends Transform {
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
     _flush(callback) {
-        // A pending custom escape at EOF is literal data, not a reason to discard the row.
+        if (this.options.strictQuotes) {
+            if (this.state.quoted && !this.state.pendingQuote) {
+                return callback(new Error('Unterminated quoted field'));
+            }
+            if (this.state.afterQuote && this.state.pendingCr && !this.state.first) {
+                return callback(new Error('Invalid character after closing quote'));
+            }
+        }
+        // A pending custom escape at EOF remains literal data in permissive mode.
         if (!this._prev) return callback();
         const error = this.parseLine(this._prev, this.state.previousEnd, this._prev.length + 1); // plus since online -1s
         callback(error);
@@ -316,6 +328,7 @@ class CsvParser extends Transform {
                 this.state.pendingQuote = false;
                 if (chr === quote && escape === quote) continue;
                 this.state.quoted = false;
+                this.state.afterQuote = this.options.strictQuotes;
                 if (chr !== cr && chr !== this.options.separator && chr !== this.options.newline) {
                     this.state.malformedQuoted = true;
                 }
@@ -323,6 +336,21 @@ class CsvParser extends Transform {
             if (this.state.escaped) {
                 this.state.escaped = false;
                 if (chr === quote) continue;
+            }
+
+            if (this.state.afterQuote) {
+                if (chr === cr && !this.options.customNewline && this.options.newline === nl) {
+                    if (index + 1 === bufferLength) {
+                        this.state.pendingCr = true;
+                        break;
+                    }
+                    if (nextChr !== nl && !this.state.first) {
+                        return callback(new Error('Invalid character after closing quote'));
+                    }
+                } else if (chr !== this.options.separator && chr !== this.options.newline) {
+                    return callback(new Error('Invalid character after closing quote'));
+                }
+                if (chr === this.options.separator) this.state.afterQuote = false;
             }
 
             if (this.state.quoted) {
@@ -366,6 +394,7 @@ class CsvParser extends Transform {
             this.state.rowLength = 0;
             this.state.fieldStart = true;
             this.state.malformedQuoted = false;
+            this.state.afterQuote = false;
         }
 
         if (this.state.previousEnd === bufferLength) {
@@ -391,4 +420,68 @@ class CsvParser extends Transform {
  */
 export default function csvParser(options) {
     return new CsvParser(options);
+}
+
+/**
+ * Stream a whole file through the parser without retaining its data rows.
+ * @param {string} filePath - Filesystem path to validate.
+ * @param {object|ReadonlyArray<string>} [optionsOrHeaders] - Factory-compatible parser settings.
+ * @returns {Promise<{headers: (string|null)[]|false|null, recordCount: number}>} Effective headers and data count.
+ */
+export async function validateFile(filePath, optionsOrHeaders) {
+    const streams = [];
+    try {
+        if (typeof filePath !== 'string') throw new TypeError('filePath must be a string');
+        const options = Array.isArray(optionsOrHeaders)
+            ? { headers: [...optionsOrHeaders] }
+            : { ...optionsOrHeaders };
+        if (Array.isArray(options.headers)) options.headers = [...options.headers];
+        const parser = csvParser(options);
+        streams.push(parser);
+
+        // Callback exceptions must enter the pipeline, including a final row in _flush.
+        for (const method of ['_transform', '_flush']) {
+            const original = parser[method];
+            parser[method] = (...arguments_) => {
+                try {
+                    original.apply(parser, arguments_);
+                } catch (error) {
+                    arguments_.at(-1)(
+                        error instanceof Error ? error : new Error(String(error), { cause: error }),
+                    );
+                }
+            };
+        }
+
+        let recordCount = 0;
+        const sink = new Writable({
+            objectMode: true,
+            write(row, encoding, callback) {
+                recordCount++;
+                callback();
+            },
+        });
+        streams.push(sink);
+        const source = createReadStream(filePath);
+        streams.push(source);
+        await pipeline(source, parser, sink);
+        return {
+            headers: Array.isArray(parser.headers)
+                ? [...parser.headers]
+                : parser.headers === false
+                  ? false
+                  : defaults.headers,
+            recordCount,
+        };
+    } catch (error_) {
+        for (const stream of streams) stream.destroy();
+        const error = new Error(
+            `Unable to validate ${String(filePath)}: ${error_?.message ?? error_}`,
+            {
+                cause: error_,
+            },
+        );
+        if (error_?.code !== undefined) error.code = error_.code;
+        throw error;
+    }
 }

@@ -5,7 +5,12 @@ import { readFileSync } from 'node:fs';
 import test from 'ava';
 import execa from 'execa';
 
-import csv from '../index.js';
+import csv, { validateFile } from '../index.js';
+
+test('ESM exposes the named validation helper alongside the default factory', (t) => {
+    t.is(typeof validateFile, 'function');
+    t.is(typeof csv, 'function');
+});
 
 const cliPath = fileURLToPath(new URL('../bin/csv-parser', import.meta.url));
 

@@ -1,5 +1,5 @@
 import { expectType } from 'tsd';
-import csvParser from './index.js';
+import csvParser, { validateFile, type ValidationResult } from './index.js';
 
 const options: csvParser.Options = {};
 
@@ -57,3 +57,16 @@ expectType<csvParser.CsvParser>(csvParser({ skipComments: '#' }));
 expectType<csvParser.CsvParser>(csvParser({ skipLines: 1 }));
 expectType<csvParser.CsvParser>(csvParser({ maxRowBytes: 1 }));
 expectType<csvParser.CsvParser>(csvParser({ strict: true }));
+expectType<csvParser.CsvParser>(csvParser({ strictQuotes: true }));
+expectType<csvParser.CsvParser>(csvParser({ strictQuotes: false, strict: true }));
+
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv'));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', options));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', ['a', 'b'] as const));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { headers: false, strictQuotes: true }));
+expectType<(string | null)[] | false | null>((await validateFile('synthetic.csv')).headers);
+expectType<number>((await validateFile('synthetic.csv')).recordCount);
+// @ts-expect-error Only filesystem string paths are accepted.
+validateFile(Buffer.from('synthetic.csv'));
+// @ts-expect-error URL paths are outside the helper contract.
+validateFile(new URL('file:///synthetic.csv'));

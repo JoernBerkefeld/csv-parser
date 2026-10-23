@@ -1,5 +1,23 @@
 # Changelog
 
+## [4.1.0] — 2026-10-23
+
+### Added
+
+- Named `validateFile(path, optionsOrHeaders?)` export streams a whole file through
+  the same parser and returns effective headers and a data-record count without
+  retaining rows or caching validation results. Parser, filesystem and mapping
+  failures reject with path context and a cause; filesystem codes are preserved.
+- Opt-in `strictQuotes: true` rejects unterminated quoted fields and invalid
+  characters after closing quotes. It is independent of `strict` column-count
+  checking; both remain disabled by default in validation and parsing.
+
+The default factory API, CLI and Node.js requirement are unchanged. Empty and
+header-only files may validate successfully with zero data records; consumers
+must enforce their own nonempty policy. Validation does not guarantee unchanged
+source bytes, transactions or safe destructive imports. Data Loader adoption is
+separate and deferred.
+
 ## [4.0.7] — 2026-10-23
 
 ### Development dependencies
