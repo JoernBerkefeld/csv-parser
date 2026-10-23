@@ -59,6 +59,9 @@ class CsvParser extends Transform {
             previousEnd: 0,
             rowLength: 0,
             quoted: false,
+            fieldStart: true,
+            malformedQuoted: false,
+            pendingQuote: false,
         };
 
         // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
@@ -80,8 +83,11 @@ class CsvParser extends Transform {
 
     parseCell(buffer, start, end) {
         const { escape, quote } = this.options;
+        // Unquoted cells retain literal quote and escape bytes verbatim.
+        if (buffer[start] !== quote) return this.parseValue(buffer, start, end);
+
         // remove quotes from quoted cells
-        if (buffer[start] === quote && buffer[end - 1] === quote) {
+        if (buffer[end - 1] === quote) {
             start++;
             end--;
         }
@@ -144,7 +150,7 @@ class CsvParser extends Transform {
         };
 
         for (let index = start; index < end; index++) {
-            const isStartingQuote = !isQuoted && buffer[index] === quote;
+            const isStartingQuote = !isQuoted && index === offset && buffer[index] === quote;
             const isEndingQuote =
                 isQuoted &&
                 buffer[index] === quote &&
@@ -265,23 +271,37 @@ class CsvParser extends Transform {
                 return callback(new Error('Row exceeds the maximum size'));
             }
 
-            if (chr === escape && nextChr === quote && index !== start && !this.state.escaped) {
-                this.state.escaped = true;
-                continue;
+            // Resolve a possible doubled quote using the next byte, even across chunks.
+            if (this.state.pendingQuote) {
+                this.state.pendingQuote = false;
+                if (chr === quote && escape === quote) continue;
+                this.state.quoted = false;
+                if (chr !== cr && chr !== this.options.separator && chr !== this.options.newline) {
+                    this.state.malformedQuoted = true;
+                }
             }
-            if (chr === quote) {
-                if (this.state.escaped) {
-                    this.state.escaped = false;
-                    // non-escaped quote (quoting the cell)
-                } else {
-                    this.state.quoted = !this.state.quoted;
+            if (this.state.escaped) {
+                this.state.escaped = false;
+                if (chr === quote) continue;
+            }
+
+            if (this.state.quoted) {
+                if (chr === quote) {
+                    this.state.pendingQuote = true;
+                } else if (chr === escape) {
+                    this.state.escaped = true;
                 }
                 continue;
             }
 
-            if (this.state.quoted) {
+            // Only field starts introduce quoting; retain inherited transitions after
+            // malformed trailing data in an originally quoted field until row end.
+            if (chr === quote && (this.state.fieldStart || this.state.malformedQuoted)) {
+                this.state.quoted = true;
+                this.state.fieldStart = false;
                 continue;
             }
+            this.state.fieldStart = chr === this.options.separator;
 
             if (this.state.first && !this.options.customNewline) {
                 if (chr === nl) {
@@ -298,6 +318,8 @@ class CsvParser extends Transform {
             this.parseLine(buffer, this.state.previousEnd, index + 1);
             this.state.previousEnd = index + 1;
             this.state.rowLength = 0;
+            this.state.fieldStart = true;
+            this.state.malformedQuoted = false;
         }
 
         if (this.state.previousEnd === bufferLength) {
