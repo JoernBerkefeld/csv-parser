@@ -161,14 +161,13 @@ for (const separator of [',', '\t']) {
             }),
             [{ A: values[0], DROP: values[1], C: '' }],
         );
-        // Whole-buffer CRLF is valid; inherited split-CRLF correction belongs to chunk 2.
-        const crlfInput = Buffer.from(headerLine.replace('\n', '\r\n') + line + '\r\n');
-        t.deepEqual(
-            await parse([crlfInput], {
-                separator,
-            }),
-            [{ A: values[0], DROP: values[1], C: '' }],
-        );
+        // Literal quotes and inferred CRLF must compose at every byte boundary.
+        const crlfInput = headerLine.replace('\n', '\r\n') + line + '\r\n';
+        for (const chunks of layouts(crlfInput)) {
+            t.deepEqual(await parse(chunks, { separator }), [
+                { A: values[0], DROP: values[1], C: '' },
+            ]);
+        }
     });
 }
 

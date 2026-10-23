@@ -62,6 +62,7 @@ class CsvParser extends Transform {
             fieldStart: true,
             malformedQuoted: false,
             pendingQuote: false,
+            pendingCr: false,
         };
 
         // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
@@ -254,6 +255,12 @@ class CsvParser extends Transform {
 
         if (this._prev) {
             start = this._prev.length;
+            if (this.state.pendingCr) {
+                // Revisit only the undecided CR; its byte was already counted.
+                start--;
+                this.state.rowLength--;
+                this.state.pendingCr = false;
+            }
             buffer = Buffer.concat([this._prev, data]);
             // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
             this._prev = null;
@@ -306,8 +313,13 @@ class CsvParser extends Transform {
             if (this.state.first && !this.options.customNewline) {
                 if (chr === nl) {
                     this.options.newline = nl;
-                } else if (chr === cr && nextChr !== nl) {
-                    this.options.newline = cr;
+                } else if (chr === cr) {
+                    if (index + 1 === bufferLength) {
+                        // Header CR needs one more byte to distinguish CRLF from CR.
+                        this.state.pendingCr = true;
+                        break;
+                    }
+                    if (nextChr !== nl) this.options.newline = cr;
                 }
             }
 
