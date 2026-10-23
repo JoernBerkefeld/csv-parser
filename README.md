@@ -9,12 +9,12 @@ responsible for maintaining this fork.
 Version 4.0.0 intentionally replaces upstream CommonJS with native ESM and raises
 the Node.js requirement to `^22.22.2 || >=24.15.0`. Import the default parser
 factory from `@joern.berkefeld/csv-parser`; there is no CommonJS distribution.
-This is a module/runtime/tooling modernization, not a parser behavior fix;
-behavioral parity with the inherited parser does not establish correctness.
-Known inherited limitations include literal quotes inside unquoted fields and
-CRLF detection when a stream chunk ends between `\r` and `\n`: values can retain
-a leading `\n`. For example, `name\r\nΔelta\r\nend` parses correctly as one buffer
-but retains leading line feeds in values when supplied one byte at a time.
+Version 4.0.1 corrects literal-quote handling and automatic CRLF detection across
+stream chunks. A quote opens a quoted field only at the start of that field;
+quotes inside an unquoted value remain literal data. Quoted delimiters, escaped
+quotes and multiline quoted values remain supported. Automatic CRLF detection
+also handles a chunk ending between `\r` and `\n` without adding a line feed to
+the next value, including when input arrives one byte at a time.
 The MIT license and original copyright are retained.
 
 Streaming CSV parser that aims for maximum speed as well as compatibility with

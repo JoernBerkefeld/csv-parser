@@ -1,5 +1,6 @@
 import { Transform, Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 import test from 'ava';
 import execa from 'execa';
@@ -53,7 +54,8 @@ test('ESM factory preserves TSV options and mappings', async (t) => {
 
 test('ESM CLI reports the scoped major version', async (t) => {
     const { stdout } = await execa(process.execPath, [cliPath, '--version']);
-    t.is(stdout, '4.0.0');
+    const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    t.is(stdout, manifest.version);
 });
 
 for (const separator of [',', '\t']) {

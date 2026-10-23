@@ -81,6 +81,8 @@ test('npm publish normalization retains the CLI without metadata autocorrections
         url: 'git+https://github.com/JoernBerkefeld/csv-parser.git',
     });
     const lock = JSON.parse(readFileSync(new URL('../package-lock.json', import.meta.url), 'utf8'));
+    assert.equal(lock.version, package_.content.version);
+    assert.equal(lock.packages[''].version, package_.content.version);
     assert.equal(lock.name, package_.content.name);
     assert.equal(lock.packages[''].name, package_.content.name);
     assert.deepEqual(lock.packages[''].bin, package_.content.bin);

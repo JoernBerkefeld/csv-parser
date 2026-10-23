@@ -1,6 +1,6 @@
 {
     "name": "@joern.berkefeld/csv-parser",
-    "version": "4.0.0",
+    "version": "4.0.1",
     "description": "Native ESM streaming CSV parser fork with a default factory API and CLI",
     "type": "module",
     "license": "MIT",
@@ -27,6 +27,7 @@
     "main": "index.js",
     "types": "index.d.ts",
     "files": [
+        "CHANGELOG.md",
         "bin/csv-parser",
         "index.js",
         "index.d.ts"
