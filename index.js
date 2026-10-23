@@ -32,6 +32,21 @@ function sanitizeHeader(header) {
     return typeof header !== 'string' || DANGEROUS_KEYS.has(header) ? null : header;
 }
 
+/**
+ * Find duplicate retained row-property keys before parsing data.
+ * @param {Array} headers - Explicit or mapped headers.
+ * @returns {Error|undefined} Duplicate-header error, if any.
+ */
+function duplicateHeaderError(headers) {
+    const seen = new Set();
+    for (const header of headers) {
+        if (header === null || header === undefined) continue;
+        const key = String(header);
+        if (seen.has(key)) return new Error(`Duplicate header: ${key}`);
+        seen.add(key);
+    }
+}
+
 class CsvParser extends Transform {
     constructor(options_ = {}) {
         super({ objectMode: true, highWaterMark: 16 });
@@ -39,6 +54,11 @@ class CsvParser extends Transform {
         if (Array.isArray(options_)) options_ = { headers: options_ };
 
         const options = Object.assign({}, defaults, options_);
+
+        if (Array.isArray(options.headers)) {
+            const error = duplicateHeaderError(options.headers);
+            if (error) throw error;
+        }
 
         options.customNewline = options.newline !== defaults.newline;
 
@@ -199,6 +219,9 @@ class CsvParser extends Transform {
                 return sanitizeHeader(mapped);
             });
 
+            const error = duplicateHeaderError(this.headers);
+            if (error) return error;
+
             this.emit('headers', this.headers);
             return;
         }
@@ -239,8 +262,8 @@ class CsvParser extends Transform {
     _flush(callback) {
         // A pending custom escape at EOF is literal data, not a reason to discard the row.
         if (!this._prev) return callback();
-        this.parseLine(this._prev, this.state.previousEnd, this._prev.length + 1); // plus since online -1s
-        callback();
+        const error = this.parseLine(this._prev, this.state.previousEnd, this._prev.length + 1); // plus since online -1s
+        callback(error);
     }
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
@@ -328,7 +351,8 @@ class CsvParser extends Transform {
                 continue;
             }
 
-            this.parseLine(buffer, this.state.previousEnd, index + 1);
+            const error = this.parseLine(buffer, this.state.previousEnd, index + 1);
+            if (error) return callback(error);
             this.state.previousEnd = index + 1;
             this.state.rowLength = 0;
             this.state.fieldStart = true;

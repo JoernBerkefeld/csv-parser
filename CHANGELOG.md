@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.0.3] — 2026-10-23
+
+### Fixed
+
+- Reject duplicate retained headers by default rather than silently overwriting
+  an earlier column. Explicit arrays fail when the parser is created; inferred
+  headers fail through the stream after mapping and existing sanitization, before
+  any data rows are emitted. Empty names participate in duplicate detection;
+  removed columns and `headers: false` retain their existing behavior.
+- This is an intentional patch behavior correction for duplicate input, not a
+  rename, array-value or last-wins mode. Valid CSV/TSV values and streaming remain
+  unchanged. It does not add import transaction or pre-clear safety to consumers.
+
 ## [4.0.2] — 2026-10-23
 
 ### Development dependencies

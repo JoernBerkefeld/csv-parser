@@ -169,6 +169,16 @@ Using `headers: false` with the same `data.csv` example from above would yield:
 
 _Note: If using the `headers` for an operation on a file which contains headers on the first line, specify `skipLines: 1` to skip over the row, or the headers row will appear as normal row data. Alternatively, use the `mapHeaders` option to manipulate existing headers in that scenario._
 
+Duplicate retained header names are rejected by default instead of silently
+replacing earlier column values. Explicit header arrays (including the factory's
+array shorthand) throw an error when the parser is created. Inferred headers are
+checked after `mapHeaders` and the existing header sanitization; a collision ends
+the stream with an error before any data rows or `headers` event are emitted.
+Empty-string names count as names, while removed (`null`) columns do not.
+`headers: false` continues to use numeric column keys without this validation.
+This is an intentional correction to duplicate-input behavior in the 4.0.3 patch;
+it does not provide transaction or pre-clear protection for importing consumers.
+
 #### mapHeaders
 
 Type: `Function`
