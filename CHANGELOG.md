@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.0.5] — 2026-10-23
+
+### Fixed
+
+- Preserve explicit `__proto__` columns as own data properties without replacing
+  individual row prototypes when raw Buffer cells or object-valued `mapValues`
+  results are used. String values are retained as well. Rows keep their ordinary
+  `Object.prototype`; inferred dangerous-header removal and duplicate rejection
+  are unchanged. This corrects row-local prototype mutation, not global
+  `Object.prototype` pollution.
+
 ## [4.0.4] — 2026-10-23
 
 ### Fixed

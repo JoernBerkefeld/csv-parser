@@ -39,6 +39,65 @@ test.cb('headers option', (t) => {
 });
 
 for (const separator of [',', '\t']) {
+    test(`explicit special headers retain own values and ordinary prototypes (${JSON.stringify(separator)})`, async (t) => {
+        const headers = [
+            '__proto__',
+            'normal',
+            'constructor',
+            'prototype',
+            'toString',
+            'hasOwnProperty',
+        ];
+        const values = ['Δelta', 'kept', 'ctor', 'proto', 'string', 'own'];
+        const input = Buffer.from(values.join(separator));
+        const globalProperties = Object.getOwnPropertyDescriptors(Object.prototype);
+        for (const raw of [false, true]) {
+            for (const chunks of [[input], [...input].map((byte) => Buffer.from([byte]))]) {
+                for (const outputByteOffset of [false, true]) {
+                    const parser = csv({ headers, separator, raw, outputByteOffset });
+                    for (const chunk of chunks) parser.write(chunk);
+                    parser.end();
+                    const rows = await Array.fromAsync(parser);
+                    t.is(rows.length, 1);
+                    const row = outputByteOffset ? rows[0].row : rows[0];
+                    if (outputByteOffset) t.is(rows[0].byteOffset, 0);
+                    t.is(Object.getPrototypeOf(row), Object.prototype);
+                    t.deepEqual(Object.keys(row), headers);
+                    for (const [index, header] of headers.entries()) {
+                        t.true(Object.hasOwn(row, header));
+                        t.deepEqual(row[header], raw ? Buffer.from(values[index]) : values[index]);
+                    }
+                    t.deepEqual(Object.getOwnPropertyDescriptor(row, '__proto__'), {
+                        value: raw ? Buffer.from(values[0]) : values[0],
+                        writable: true,
+                        enumerable: true,
+                        configurable: true,
+                    });
+                }
+            }
+        }
+        const shorthand = csv(['__proto__', 'normal']);
+        shorthand.end('value,kept');
+        const [row] = await Array.fromAsync(shorthand);
+        t.is(Object.getPrototypeOf(row), Object.prototype);
+        t.true(Object.hasOwn(row, '__proto__'));
+        t.is(row.__proto__, 'value');
+        t.is(row.normal, 'kept');
+        t.deepEqual(Object.getOwnPropertyDescriptors(Object.prototype), globalProperties);
+        t.throws(() => csv(['__proto__', '__proto__']), { message: 'Duplicate header: __proto__' });
+    });
+
+    test(`inferred sanitization retains legitimate inherited names (${JSON.stringify(separator)})`, async (t) => {
+        const parser = csv({ separator });
+        parser.end(
+            `__proto__${separator}constructor${separator}prototype${separator}toString${separator}hasOwnProperty\nunsafe${separator}unsafe${separator}unsafe${separator}text${separator}own`,
+        );
+        const [row] = await Array.fromAsync(parser);
+        t.is(Object.getPrototypeOf(row), Object.prototype);
+        t.deepEqual(row, { toString: 'text', hasOwnProperty: 'own' });
+        t.false(Object.hasOwn(row, '__proto__'));
+    });
+
     test(`raw inferred headers are strings with Buffer values (${JSON.stringify(separator)})`, async (t) => {
         const input = Buffer.from(`"naïve"${separator}empty\r\nΔelta${separator}`);
         for (const chunks of [[input], [...input].map((byte) => Buffer.from([byte]))]) {

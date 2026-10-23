@@ -179,6 +179,13 @@ Empty-string names count as names, while removed (`null`) columns do not.
 This is an intentional correction to duplicate-input behavior in the 4.0.3 patch;
 it does not provide transaction or pre-clear protection for importing consumers.
 
+Rows retain the ordinary `Object.prototype`. An explicit `__proto__` header is
+stored as an own data property, including string, raw Buffer and object-valued
+`mapValues` results; it does not replace the individual row's prototype.
+Explicit `constructor` and `prototype` columns are retained too. Inferred headers
+still remove `__proto__`, `constructor` and `prototype` after `mapHeaders`;
+ordinary names such as `toString` and `hasOwnProperty` remain valid columns.
+
 #### mapHeaders
 
 Type: `Function`

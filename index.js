@@ -253,6 +253,13 @@ class CsvParser extends Transform {
             if (header === null) continue; // skip columns
             if (header === undefined) {
                 row[`_${index}`] = cell;
+            } else if (header === '__proto__') {
+                Object.defineProperty(row, header, {
+                    value: cell,
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                });
             } else {
                 row[header] = cell;
             }
