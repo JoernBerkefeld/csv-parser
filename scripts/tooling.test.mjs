@@ -10,24 +10,65 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { runInNewContext } from 'node:vm';
 
+/**
+ * Validate temporary placement before creating benchmark fixtures.
+ * @param {string} platform - Runtime platform.
+ * @param {object} directories - Environment overrides and actual Node temporary directory.
+ * @returns {void} Throws if any directory is unsafe.
+ */
+function validateTemporaryDirectories(platform, directories) {
+    const isWindows = platform === 'win32';
+    const paths = isWindows ? path.win32 : path.posix;
+    const expected = isWindows ? String.raw`f:\temp` : '/tmp';
+    for (const [name, value] of Object.entries(directories)) {
+        if (!value && name !== 'NODE' && (!isWindows || name !== 'TEMP')) continue;
+        assert.ok(value && paths.isAbsolute(value), `${name} must be absolute`);
+        const normalized = paths.normalize(value).replace(/[\\/]+$/, '');
+        assert.equal(isWindows ? normalized.toLowerCase() : normalized, expected, name);
+    }
+}
+
+test('temporary placement validates Windows and Linux without depending on the host', () => {
+    const windows = { TEMP: String.raw`F:\Temp`, NODE: 'f:/temp/' };
+    const linux = { NODE: '/tmp', TEMP: undefined, TMP: '', TMPDIR: '/tmp/' };
+    assert.doesNotThrow(() => validateTemporaryDirectories('win32', windows));
+    assert.doesNotThrow(() => validateTemporaryDirectories('linux', linux));
+    for (const name of ['TEMP', 'NODE', 'TMP', 'TMPDIR']) {
+        for (const value of [
+            'F:',
+            'F:\\',
+            'Temp',
+            String.raw`\Temp`,
+            '/Temp',
+            String.raw`F:\Temp\..`,
+            String.raw`D:\Temp`,
+        ]) {
+            assert.throws(() =>
+                validateTemporaryDirectories('win32', { ...windows, [name]: value }),
+            );
+        }
+        for (const value of ['/', 'tmp', '/tmp/..', '/var/tmp', '/TMP', String.raw`F:\Temp`]) {
+            assert.throws(() => validateTemporaryDirectories('linux', { ...linux, [name]: value }));
+        }
+        assert.doesNotThrow(() =>
+            validateTemporaryDirectories('win32', { ...windows, [name]: 'F:/TEMP/' }),
+        );
+        assert.doesNotThrow(() =>
+            validateTemporaryDirectories('linux', { ...linux, [name]: '/tmp/' }),
+        );
+    }
+    assert.throws(() => validateTemporaryDirectories('win32', { ...windows, TEMP: undefined }));
+    assert.throws(() => validateTemporaryDirectories('win32', { ...windows, NODE: undefined }));
+    assert.throws(() => validateTemporaryDirectories('linux', { ...linux, NODE: undefined }));
+});
+
 test('benchmark preserves row counts and two-significant-digit millisecond output', () => {
-    const temporaryDirectories = {
+    validateTemporaryDirectories(process.platform, {
         TEMP: process.env.TEMP,
         NODE: os.tmpdir(),
         TMP: process.env.TMP,
         TMPDIR: process.env.TMPDIR,
-    };
-    for (const [name, value] of Object.entries(temporaryDirectories)) {
-        if (!value && (name === 'TMP' || name === 'TMPDIR')) continue;
-        assert.ok(value && path.isAbsolute(value), `${name} must be absolute`);
-        assert.equal(
-            path
-                .resolve(value)
-                .replace(/[\\/]+$/, '')
-                .toLowerCase(),
-            String.raw`f:\temp`,
-        );
-    }
+    });
     const root = mkdtempSync(path.join(os.tmpdir(), 'csv-benchmark-test-'));
     writeFileSync(path.join(root, '.run-owner'), randomUUID());
     const input = path.join(root, 'synthetic.csv');
