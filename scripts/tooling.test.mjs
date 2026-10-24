@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createRequire } from 'node:module';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -59,7 +59,7 @@ test('temporary placement validates Windows and Linux without depending on the h
     assert.throws(() => validateTemporaryDirectories('linux', { ...linux, NODE: undefined }));
 });
 
-test('benchmark preserves row counts and two-significant-digit millisecond output', () => {
+test('benchmark preserves row counts and two-significant-digit millisecond output', async () => {
     validateTemporaryDirectories(process.platform, {
         TEMP: process.env.TEMP,
         NODE: os.tmpdir(),
@@ -68,10 +68,20 @@ test('benchmark preserves row counts and two-significant-digit millisecond outpu
     });
     const root = mkdtempSync(path.join(os.tmpdir(), 'csv-benchmark-test-'));
     writeFileSync(path.join(root, '.run-owner'), randomUUID());
-    const input = path.join(root, 'synthetic.csv');
+    const input = path.join(root, 'synthetic-é漢.csv');
     const loader = path.join(root, 'reject-globby.mjs');
-    writeFileSync(path.join(root, 'registered.json'), JSON.stringify([input, loader]));
+    const fixtures = path.join(root, 'test', 'fixtures');
+    const nested = path.join(fixtures, 'nested');
+    const discovered = path.join(nested, 'glob-é漢.csv');
+    const ignored = path.join(fixtures, 'ignored.txt');
+    writeFileSync(
+        path.join(root, 'registered.json'),
+        JSON.stringify([input, loader, fixtures, nested, discovered, ignored]),
+    );
+    mkdirSync(nested, { recursive: true });
     writeFileSync(input, 'name,value\nalpha,1\nbeta,2\n');
+    writeFileSync(discovered, 'name,value\ngamma,3\n');
+    writeFileSync(ignored, 'name,value\ndelta,4\n');
     const bench = fileURLToPath(new URL('../bin/bench', import.meta.url));
     const environment = { ...process.env, FORCE_COLOR: '0', NODE_OPTIONS: '' };
     const successful = spawnSync(process.execPath, [bench, input], {
@@ -80,17 +90,49 @@ test('benchmark preserves row counts and two-significant-digit millisecond outpu
     });
     assert.equal(successful.status, 0, successful.stderr);
     assert.match(successful.stdout, /Filename\s+Rows Parsed\s+Duration/);
-    const match = successful.stdout.match(/synthetic\.csv\s+2\s+(\S+)ms/);
+    const escape = String.fromCodePoint(27);
+    assert.equal(successful.stdout.includes(escape), false);
+    const match = successful.stdout.match(/synthetic-é漢\.csv\s+2\s+(\S+)ms/);
     assert.ok(match, successful.stdout);
     assert.ok(Number(match[1]) >= 0);
     assert.equal(Number(match[1]).toPrecision(2), match[1]);
+
+    const colored = spawnSync(process.execPath, [bench, input], {
+        encoding: 'utf8',
+        env: { ...environment, FORCE_COLOR: '1' },
+    });
+    assert.equal(colored.status, 0, colored.stderr);
+    assert.ok(colored.stdout.includes(`${escape}[2m${escape}[4mFilename`));
+    assert.ok(colored.stdout.includes(`${escape}[34msynthetic-é漢.csv${escape}[39m`));
+    assert.ok([31, 32, 33].some((color) => colored.stdout.includes(`${escape}[${color}m`)));
+    const { default: strip } = await import('strip-ansi');
+    const plainColored = strip(colored.stdout);
+    const layouts = [colored.stdout, successful.stdout].map((output) =>
+        strip(output)
+            .trim()
+            .split('\n')
+            .map((line) => [line.indexOf('Rows Parsed'), line.indexOf('2 ')]),
+    );
+    assert.deepEqual(layouts[0], layouts[1]);
+    assert.match(plainColored, /synthetic-é漢\.csv\s+2\s+(\S+)ms/);
+
+    const globbed = spawnSync(process.execPath, [bench], {
+        cwd: root,
+        encoding: 'utf8',
+        env: environment,
+    });
+    assert.equal(globbed.status, 0, globbed.stderr);
+    const globMatch = globbed.stdout.match(/glob-é漢\.csv\s+1\s+(\S+)ms/);
+    assert.ok(globMatch, globbed.stdout);
+    assert.equal(Number(globMatch[1]).toPrecision(2), globMatch[1]);
+    assert.doesNotMatch(globbed.stdout, /ignored|synthetic/);
 
     // Reject genuinely asynchronous benchmark discovery, not an uncaught stream error.
     writeFileSync(
         loader,
         `export async function resolve(specifier, context, nextResolve) {
             if (specifier === 'globby') return {
-                url: 'data:text/javascript,' + encodeURIComponent('export default async () => { await Promise.resolve(); throw new Error("synthetic benchmark rejection"); }'),
+                url: 'data:text/javascript,' + encodeURIComponent('export const globby = async () => { await Promise.resolve(); throw new Error("synthetic benchmark rejection"); };'),
                 shortCircuit: true
             };
             return nextResolve(specifier, context);

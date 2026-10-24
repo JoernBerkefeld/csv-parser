@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createReadStream } from 'node:fs';
 import path from 'node:path';
-import globby from 'globby';
+import { globby } from 'globby';
 import chalk from 'chalk';
 import table from 'text-table';
 import { performance } from 'node:perf_hooks';

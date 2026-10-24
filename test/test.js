@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 
 import test from 'ava';
 import spectrum from 'csv-spectrum';
-import execa from 'execa';
+import { execa } from 'execa';
 
 import csv from '../index.js';
 

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 import test from 'ava';
-import execa from 'execa';
+import { execa } from 'execa';
 
 import csv, { validateFile } from '../index.js';
 
@@ -63,11 +63,37 @@ test('ESM CLI reports the scoped major version', async (t) => {
     t.is(stdout, manifest.version);
 });
 
+test('ESM CLI preserves exact multiline stdin output', async (t) => {
+    const { stdout, stderr, exitCode } = await execa(process.execPath, [cliPath], {
+        input: 'label,value\n"Δelta,one","two""quotes"\nlast,\n',
+    });
+    t.is(
+        stdout,
+        [
+            JSON.stringify({ label: 'Δelta,one', value: 'two"quotes' }),
+            JSON.stringify({ label: 'last', value: '' }),
+        ].join(process.platform === 'win32' ? '\r\n' : '\n'),
+    );
+    t.is(stderr, '');
+    t.is(exitCode, 0);
+});
+
+test('ESM CLI subprocess failures retain exit code and stderr', async (t) => {
+    const missingPath = fileURLToPath(
+        new URL('../test/fixtures/synthetic-missing.csv', import.meta.url),
+    );
+    const error = await t.throwsAsync(execa(process.execPath, [cliPath, missingPath]));
+    t.is(error.exitCode, 2);
+    t.is(error.stdout, '');
+    t.is(error.stderr, `File: ${missingPath} does not exist`);
+    t.true(error.failed);
+});
+
 for (const separator of [',', '\t']) {
     test(`ESM CLI reads synthetic stdin with separator ${JSON.stringify(separator)}`, async (t) => {
         const { stdout } = await execa(process.execPath, [cliPath, '--separator', separator], {
             input: `label${separator}value\ndemo${separator}42\n`,
         });
-        t.deepEqual(JSON.parse(stdout), { label: 'demo', value: '42' });
+        t.is(stdout, JSON.stringify({ label: 'demo', value: '42' }));
     });
 }
