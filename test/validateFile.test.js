@@ -75,6 +75,48 @@ for (const separator of [',', '\t']) {
     );
 }
 
+test.serial('validateFile shares BOM preprocessing, counts and callback failures', async (t) => {
+    for (const separator of [',', '\t']) {
+        const text = `\u{FEFF}"a${separator}b"${separator}c\n"x\ny"${separator}z`;
+        const file = await fixture(text);
+        const options = { bom: true, separator, strictQuotes: true, strict: true };
+        t.deepEqual(await validateFile(file, options), {
+            headers: [`a${separator}b`, 'c'],
+            recordCount: 1,
+        });
+    }
+    const only = await fixture('\u{FEFF}');
+    t.deepEqual(await validateFile(only, { bom: true, maxRowBytes: 0 }), {
+        headers: absent,
+        recordCount: 0,
+    });
+    const partial = await fixture(Buffer.from([0xef, 0xbb]));
+    for (const key of ['mapHeaders', 'mapValues']) {
+        let calls = 0;
+        const cause = new Error('synthetic incomplete-prefix mapper failure');
+        const options = {
+            bom: true,
+            ...(key === 'mapValues' && { headers: ['a'] }),
+            [key]: () => {
+                calls++;
+                throw cause;
+            },
+        };
+        const error = await t.throwsAsync(validateFile(partial, options));
+        t.is(error.cause, cause);
+        t.is(calls, 1);
+    }
+    t.deepEqual(await validateFile(partial, { bom: true, headers: false, raw: true }), {
+        headers: false,
+        recordCount: 1,
+    });
+    const limited = await fixture('\u{FEFF}x\n');
+    t.deepEqual(await validateFile(limited, { bom: true, headers: ['a'], maxRowBytes: 2 }), {
+        headers: ['a'],
+        recordCount: 1,
+    });
+});
+
 test.serial('validateFile empty, header-only, explicit and positional modes', async (t) => {
     const empty = await fixture('');
     t.deepEqual(await validateFile(empty), { headers: absent, recordCount: 0 });

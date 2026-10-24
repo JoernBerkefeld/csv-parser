@@ -4,7 +4,9 @@ import { pipeline } from 'node:stream/promises';
 
 const [cr] = Buffer.from('\r');
 const [nl] = Buffer.from('\n');
+const utf8Bom = Buffer.from([0xef, 0xbb, 0xbf]);
 const defaults = {
+    bom: false,
     escape: '"',
     // eslint-disable-next-line unicorn/no-null -- Preserve the public default options value.
     headers: null,
@@ -104,6 +106,7 @@ class CsvParser extends Transform {
         this.options = options;
         this.headers = options.headers;
         this.bytesRead = 0;
+        this.bomPending = options.bom ? Buffer.alloc(0) : undefined;
     }
 
     parseCell(buffer, start, end) {
@@ -273,6 +276,14 @@ class CsvParser extends Transform {
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
     _flush(callback) {
+        if (this.bomPending?.length) {
+            const pending = this.bomPending;
+            this.bomPending = undefined;
+            return this.scan(pending, (error) => {
+                if (error) return callback(error);
+                this._flush(callback);
+            });
+        }
         if (this.options.strictQuotes) {
             if (this.state.quoted && !this.state.pendingQuote) {
                 return callback(new Error('Unterminated quoted field'));
@@ -293,10 +304,34 @@ class CsvParser extends Transform {
             data = Buffer.from(data);
         }
 
+        // Count incoming physical bytes once, including an optional stripped BOM.
+        this.bytesRead += data.byteLength;
+        if (this.bomPending !== undefined) {
+            if (this.bomPending.length > 0) data = Buffer.concat([this.bomPending, data]);
+            let index = 0;
+            while (index < Math.min(data.length, utf8Bom.length) && data[index] === utf8Bom[index])
+                index++;
+            if (index === data.length && index < utf8Bom.length) {
+                // Retain only the undecided prefix (at most two bytes).
+                this.bomPending = Buffer.from(data);
+                return callback();
+            }
+            this.bomPending = undefined;
+            if (index === utf8Bom.length) data = data.subarray(utf8Bom.length);
+        }
+        this.scan(data, callback);
+    }
+
+    /**
+     * Scan effective CSV bytes, including a replayed incomplete BOM prefix.
+     * @param {Buffer} data - Bytes not yet seen by the CSV state machine.
+     * @param {(error?: Error) => void} callback - Transform completion callback.
+     * @returns {void} Completes through the callback.
+     */
+    scan(data, callback) {
         const { escape, quote } = this.options;
         let start = 0;
         let buffer = data;
-        this.bytesRead += data.byteLength;
 
         if (this._prev) {
             start = this._prev.length;

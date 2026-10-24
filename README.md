@@ -148,6 +148,23 @@ csv(['Name', 'Age']);
 If you need to specify options _and_ headers, please use the the object notation
 with the `headers` property as shown below.
 
+#### bom
+
+Type: `Boolean`<br>
+Default: `false`
+
+With `bom: true`, strip exactly one leading UTF-8 BOM (`EF BB BF`) before
+parsing CSV or TSV, even when those bytes arrive in separate stream chunks.
+This applies in raw mode too. The option is shared by the factory and
+`validateFile`; pass the same settings to validation and a later import.
+Caller-supplied header arrays are not changed. Non-leading BOMs, a second BOM
+and incomplete or non-matching prefixes remain data.
+
+`outputByteOffset` remains relative to the original input: offsets include the
+three removed BOM bytes. The removed bytes do not count toward `maxRowBytes`.
+Omitting `bom`, or setting it to `false`, preserves the existing parsing path
+without automatic BOM removal.
+
 #### escape
 
 Type: `String`<br>
@@ -340,9 +357,10 @@ reading the whole file successfully, or rejects on the first failure.
   supplied explicit headers / `false` in those modes. Header-only files succeed
   with inferred headers and zero records. Callers decide whether zero is allowed.
 - All parser settings apply, including TSV `separator: '\t'`, quote/escape,
-  newline, skips, `raw`, `maxRowBytes`, mappings and byte-offset output. There is
-  no automatic strictness, BOM removal or nonempty-file policy. Duplicate
-  retained headers are rejected by the same parser rules.
+  newline, skips, `raw`, `bom`, `maxRowBytes`, mappings and byte-offset output.
+  Strictness and leading UTF-8 BOM removal are opt-in (`strict` /
+  `strictQuotes` and `bom: true`); there is no automatic nonempty-file policy.
+  Duplicate retained headers are rejected by the same parser rules.
 - Mappings execute during validation exactly as during parsing. They execute
   **again** on a later import; equivalent results assume deterministic callbacks.
   Options and header arrays are copied, not modified in place.
@@ -466,29 +484,30 @@ of a pipeline.
 
 ## Byte Order Marks
 
-Some CSV files may be generated with, or contain a leading [Byte Order Mark](https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8). This may cause issues parsing headers and/or data from your file. From Wikipedia:
-
-> The Unicode Standard permits the BOM in UTF-8, but does not require nor recommend its use. Byte order has no meaning in UTF-8.
-
-To use this module with a file containing a BOM, please use a module like [strip-bom-stream](https://github.com/sindresorhus/strip-bom-stream) in your pipeline:
+A leading UTF-8 [Byte Order Mark](https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8)
+can otherwise become part of a header or first value. Enable [`bom`](#bom) to
+remove exactly that leading marker without an extra transform:
 
 ```js
-import fs from 'node:fs';
+import csv, { validateFile } from '@joern.berkefeld/csv-parser';
+import { createReadStream } from 'node:fs';
 
-import csv from '@joern.berkefeld/csv-parser';
-import stripBom from 'strip-bom-stream';
-
-fs.createReadStream('data.csv')
-  .pipe(stripBom())
-  .pipe(csv())
-  ...
+const options = { bom: true };
+await validateFile('data.csv', options);
+const parser = createReadStream('data.csv').pipe(csv(options));
+for await (const row of parser) {
+    console.log(row);
+}
 ```
 
-When using the CLI, the BOM can be removed by first running:
+The default is still `bom: false`: neither parsing nor validation removes a BOM
+unless requested. Only one marker at the start of the stream is removed, even
+when split across chunks; BOM bytes later in the file are preserved. This is
+not transcoding or detection of UTF-16/UTF-32 encodings.
 
-```console
-$ sed $'s/\xEF\xBB\xBF//g' data.csv
-```
+The CLI has no `--bom` flag. If using an external leading-BOM transform with
+the default parser or CLI, that transform changes the input stream, so parser
+byte offsets no longer include bytes removed upstream.
 
 ## Meta
 

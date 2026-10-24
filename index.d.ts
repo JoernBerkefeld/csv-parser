@@ -6,6 +6,14 @@ declare namespace csvParser {
 
     interface Options {
         /**
+         * Strip one leading UTF-8 BOM before parsing, including in raw mode.
+         * Byte offsets still include the three removed bytes; maxRowBytes does not.
+         *
+         * @default false
+         */
+        readonly bom?: boolean;
+
+        /**
          * A single-character string used to specify the character used to escape strings in a CSV row.
          *
          * @default '"'

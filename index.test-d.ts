@@ -6,6 +6,15 @@ const options: csvParser.Options = {};
 expectType<csvParser.CsvParser>(csvParser());
 expectType<csvParser.CsvParser>(csvParser(options));
 expectType<csvParser.CsvParser>(csvParser({ outputByteOffset: true }));
+expectType<csvParser.CsvParser>(csvParser({ bom: true }));
+expectType<csvParser.CsvParser>(csvParser({ bom: false }));
+expectType<boolean | undefined>(options.bom);
+// @ts-expect-error The BOM option is readonly.
+options.bom = true;
+// @ts-expect-error The BOM option only accepts booleans.
+csvParser({ bom: 'true' });
+// @ts-expect-error The BOM option only accepts booleans.
+csvParser({ bom: 1 });
 
 expectType<csvParser.CsvParser>(csvParser(['Name', 'Age']));
 expectType<csvParser.CsvParser>(csvParser({ escape: '"' }));
@@ -62,8 +71,16 @@ expectType<csvParser.CsvParser>(csvParser({ strictQuotes: false, strict: true })
 
 expectType<Promise<ValidationResult>>(validateFile('synthetic.csv'));
 expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', options));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { bom: true }));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { bom: false }));
+// @ts-expect-error Validation shares the boolean-only BOM option.
+validateFile('synthetic.csv', { bom: 'true' });
+// @ts-expect-error Validation shares the boolean-only BOM option.
+validateFile('synthetic.csv', { bom: 1 });
 expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', ['a', 'b'] as const));
-expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { headers: false, strictQuotes: true }));
+expectType<Promise<ValidationResult>>(
+    validateFile('synthetic.csv', { headers: false, strictQuotes: true }),
+);
 expectType<(string | null)[] | false | null>((await validateFile('synthetic.csv')).headers);
 expectType<number>((await validateFile('synthetic.csv')).recordCount);
 // @ts-expect-error Only filesystem string paths are accepted.

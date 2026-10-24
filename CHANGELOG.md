@@ -1,5 +1,16 @@
 # Changelog
 
+## [4.2.0] — 2026-10-24
+
+### Added
+
+- Opt-in `bom: true` strips exactly one leading UTF-8 BOM before CSV/TSV
+  parsing, including raw mode and BOM bytes split across stream chunks. The
+  factory and `validateFile` share the option, which defaults to `false`.
+  Caller-supplied headers are unchanged; physical byte offsets include the
+  removed three bytes, while `maxRowBytes` excludes them. Non-leading and
+  subsequent BOM bytes remain data.
+
 ## [4.1.0] — 2026-10-23
 
 ### Added

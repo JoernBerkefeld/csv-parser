@@ -16,9 +16,10 @@ function encode(value) {
  * Stream export-like synthetic records into an awaited upload-like consumer.
  * @param {number} count - Number of generated records.
  * @param {string} separator - CSV or TSV delimiter.
+ * @param {boolean} [hasBom] - Enable a bytewise leading BOM.
  * @returns {Promise<object>} Observed buffering and sampled process memory.
  */
-async function measure(count, separator) {
+async function measure(count, separator, hasBom = false) {
     let isSourceEnded = false;
     let bytes = 0;
     const values = (index) => [
@@ -32,6 +33,11 @@ async function measure(count, separator) {
      * @yields {Buffer} Next input chunk.
      */
     async function* source() {
+        if (hasBom) {
+            yield Buffer.from([0xef]);
+            yield Buffer.from([0xbb]);
+            yield Buffer.from([0xbf]);
+        }
         // Split the inferred header CRLF independently of record generation.
         yield Buffer.from(['id', 'code', 'note', 'empty'].join(separator) + '\r');
         yield Buffer.from('\n');
@@ -47,7 +53,7 @@ async function measure(count, separator) {
         isSourceEnded = true;
     }
     const parser = Readable.from(source(), { highWaterMark: 1 }).pipe(
-        csv({ separator, strict: true }),
+        csv({ separator, strict: true, bom: hasBom }),
     );
     let seen = 0;
     let isIncremental = false;
@@ -91,7 +97,7 @@ for (const separator of [',', '\t']) {
         `combined incremental export/re-import with awaited batches: ${JSON.stringify(separator)}`,
         async (t) => {
             const small = await measure(2000, separator);
-            const large = await measure(20_000, separator);
+            const large = await measure(20_000, separator, true);
             t.is(small.count, 2000);
             t.is(large.count, 20_000);
             for (const result of [small, large]) {
