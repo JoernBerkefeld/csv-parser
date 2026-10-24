@@ -430,6 +430,45 @@ test('registry guard permits registry dependencies and rejects local resolutions
     assert.equal(checkLockfile({ dependencies: { dep: { version: 'file:../dep' } } }).length, 1);
 });
 
+test('registry guard is inert on import and rejects invalid locks only as a command', () => {
+    validateTemporaryDirectories(process.platform, {
+        TEMP: process.env.TEMP,
+        NODE: os.tmpdir(),
+        TMP: process.env.TMP,
+        TMPDIR: process.env.TMPDIR,
+    });
+    const root = mkdtempSync(path.join(os.tmpdir(), 'csv-lock-guard-test-'));
+    writeFileSync(path.join(root, '.run-owner'), randomUUID());
+    const scripts = path.join(root, 'scripts');
+    const command = path.join(scripts, 'check-lockfile-registry-only.mjs');
+    const lock = path.join(root, 'package-lock.json');
+    writeFileSync(path.join(root, 'registered.json'), JSON.stringify([scripts, command, lock]));
+    mkdirSync(scripts);
+    writeFileSync(
+        command,
+        readFileSync(new URL('check-lockfile-registry-only.mjs', import.meta.url)),
+    );
+    writeFileSync(lock, JSON.stringify({ packages: { dep: { resolved: 'file:../dep' } } }));
+    const imported = spawnSync(
+        process.execPath,
+        [
+            '--input-type=module',
+            '--eval',
+            `await import(${JSON.stringify(pathToFileURL(command).href)})`,
+        ],
+        { encoding: 'utf8' },
+    );
+    assert.equal(imported.status, 0, imported.stderr);
+    assert.equal(imported.stderr, '');
+    const rejected = spawnSync(process.execPath, [command], { encoding: 'utf8' });
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /Lockfile contains non-registry dependencies/);
+    writeFileSync(lock, JSON.stringify({ packages: {} }));
+    const accepted = spawnSync(process.execPath, [command], { encoding: 'utf8' });
+    assert.equal(accepted.status, 0, accepted.stderr);
+    assert.equal(accepted.stderr, '');
+});
+
 test('coverage uses native V8 instrumentation for the ESM parser and CLI', () => {
     const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
     const coverage = readFileSync(new URL('coverage.mjs', import.meta.url), 'utf8');
@@ -469,6 +508,14 @@ test('ESLint autofix preserves starred multiline JSDoc', async () => {
     const eslint = new ESLint({ fix: true });
     const config = await eslint.calculateConfigForFile('scripts/example.mjs');
     assert.equal(config.rules['unicorn/no-asterisk-prefix-in-documentation-comments'][0], 0);
+    assert.equal(config.rules['jsdoc/check-alignment'][0], 2);
+    for (const rule of [
+        'prefer-includes-over-repeated-comparisons',
+        'no-useless-coercion',
+        'no-top-level-side-effects',
+    ]) {
+        assert.equal(config.rules[`unicorn/${rule}`][0], 2);
+    }
     const source =
         '/**\n * Describe the sample.\n *\n * @returns {number} Sample value.\n */\nexport function sample() { return 1; }\n';
     const [result] = await eslint.lintText(source, { filePath: 'scripts/example.mjs' });

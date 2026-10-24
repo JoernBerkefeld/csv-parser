@@ -197,6 +197,13 @@ test.serial(
         t.truthy(directoryError.cause.code);
         const invalid = await t.throwsAsync(validateFile(Buffer.from('no')));
         t.true(invalid.cause instanceof TypeError);
+        const symbol = await t.throwsAsync(validateFile(Symbol('synthetic-path')));
+        t.true(symbol.cause instanceof TypeError);
+        t.is(symbol.cause.message, 'filePath must be a string');
+        t.is(
+            symbol.message,
+            'Unable to validate Symbol(synthetic-path): filePath must be a string',
+        );
         await t.throwsAsync(validateFile('bad\0path'));
     },
 );

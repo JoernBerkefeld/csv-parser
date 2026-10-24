@@ -329,7 +329,7 @@ class CsvParser extends Transform {
                 if (chr === quote && escape === quote) continue;
                 this.state.quoted = false;
                 this.state.afterQuote = this.options.strictQuotes;
-                if (chr !== cr && chr !== this.options.separator && chr !== this.options.newline) {
+                if (![cr, this.options.separator, this.options.newline].includes(chr)) {
                     this.state.malformedQuoted = true;
                 }
             }
@@ -424,7 +424,7 @@ export default function csvParser(options) {
 
 /**
  * Stream a whole file through the parser without retaining its data rows.
- * @param {string} filePath - Filesystem path to validate.
+ * @param {unknown} filePath - Filesystem path to validate; must be a string.
  * @param {object|ReadonlyArray<string>} [optionsOrHeaders] - Factory-compatible parser settings.
  * @returns {Promise<{headers: (string|null)[]|false|null, recordCount: number}>} Effective headers and data count.
  */

@@ -94,6 +94,22 @@ for (const separator of [',', '\t']) {
     }
 }
 
+test('pending doubled-quote resolution preserves allowed and invalid follower bytes', async (t) => {
+    for (const separator of [',', '\t']) {
+        for (const newline of ['\n', '|']) {
+            const options = { headers: ['a', 'b'], separator, newline };
+            t.deepEqual(await parseStrict(`"value"${separator}tail${newline}`, options, 0), [
+                { a: 'value', b: 'tail' },
+            ]);
+            t.deepEqual(await parseStrict(`"value"${newline}`, options, 0), [{ a: 'value' }]);
+            await t.throwsAsync(parseStrict(`"value"x${newline}`, options, 0), {
+                message: 'Invalid character after closing quote',
+            });
+        }
+    }
+    t.deepEqual(await parseStrict('"value"\r\n', { headers: ['a'] }, 0), [{ a: 'value' }]);
+});
+
 test('strict quote failures terminate once without later rows or flush output', async (t) => {
     for (const ending of ['"bad"x\nlate\n', '"open']) {
         const parser = csv({ headers: ['a'], strictQuotes: true });

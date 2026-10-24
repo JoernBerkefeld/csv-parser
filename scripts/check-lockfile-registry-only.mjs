@@ -36,12 +36,19 @@ export function checkLockfile(lock) {
     return findings;
 }
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+/**
+ * Validate the repository lockfile when invoked as a command.
+ * @returns {void}
+ */
+function main() {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
     const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
     const findings = checkLockfile(lock);
-    if (findings.length > 0) {
-        console.error(`Lockfile contains non-registry dependencies: ${findings.join(', ')}`);
-        process.exitCode = 1;
-    }
+    if (findings.length === 0) return;
+    console.error(`Lockfile contains non-registry dependencies: ${findings.join(', ')}`);
+    process.exitCode = 1;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main();
 }
