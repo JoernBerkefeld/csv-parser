@@ -530,6 +530,11 @@ Usage: csv-parser [filename?] [options]
   --version,-v        Print out the installed version
 ```
 
+Use `csv-parser input.csv --strict` (or `csv-parser --strict input.csv`) to
+reject rows whose column count differs from the headers. For stdin, use
+`cat input.csv | csv-parser --strict`. Strict width checking remains off unless
+requested; a mismatch exits with status 1.
+
 For example; to parse a TSV file:
 
 ```

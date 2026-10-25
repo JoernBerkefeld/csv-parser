@@ -15,6 +15,7 @@ const package_ = JSON.parse(fs.readFileSync(new URL('../package.json', import.me
 function parseArguments() {
     let skipComments;
     let skipEmptyLines;
+    let strict;
     let escape = '"';
     let headers;
     let output;
@@ -32,6 +33,10 @@ function parseArguments() {
             case '--skipComments':
             case '-c': {
                 skipComments = arguments_[++index];
+                continue;
+            }
+            case '--strict': {
+                strict = true;
                 continue;
             }
             case '--skipEmptyLines': {
@@ -86,6 +91,7 @@ function parseArguments() {
     return {
         skipComments,
         skipEmptyLines,
+        strict,
         escape,
         headers,
         output,

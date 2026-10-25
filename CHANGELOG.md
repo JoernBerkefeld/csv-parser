@@ -15,6 +15,8 @@
 
 ### Fixed
 
+- CLI `--strict` now enables column-count checking rather than being treated as
+  a filename; it works before or after a filename and with stdin.
 - CLI stream failures now terminate with a concise stderr message and status 1.
   The full pipeline is awaited; standard output is not closed by the pipeline.
 - Reject colliding actual row keys, including generated overflow names such as
