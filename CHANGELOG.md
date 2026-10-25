@@ -15,6 +15,8 @@
 
 ### Fixed
 
+- CLI stream failures now terminate with a concise stderr message and status 1.
+  The full pipeline is awaited; standard output is not closed by the pipeline.
 - Reject colliding actual row keys, including generated overflow names such as
   `_1`, instead of overwriting an earlier column. Explicit, inferred and mapped
   headers share a terminal `Duplicate row key: <key>` stream error, including at

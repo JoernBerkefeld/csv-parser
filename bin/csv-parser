@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { EOL } from 'node:os';
-import { Transform } from 'node:stream';
+import { Transform, Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import fs from 'node:fs';
 import csv from '../index.js';
 
@@ -164,4 +165,24 @@ const serialize = () => {
     });
 };
 
-input.pipe(csv(options)).pipe(serialize()).pipe(output);
+try {
+    if (output === process.stdout) {
+        const stdout = new Writable({
+            write(chunk, encoding, callback) {
+                output.write(chunk, encoding, callback);
+            },
+        });
+        const forwardError = (error) => stdout.destroy(error);
+        output.on('error', forwardError);
+        try {
+            await pipeline(input, csv(options), serialize(), stdout);
+        } finally {
+            output.removeListener('error', forwardError);
+        }
+    } else {
+        await pipeline(input, csv(options), serialize(), output);
+    }
+} catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+}

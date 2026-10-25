@@ -510,7 +510,8 @@ are also emitted. The `end` event should be used to detect the end of parsing.
 
 This module also provides a CLI which will convert CSV to
 [newline-delimited](http://ndjson.org/) JSON. The following CLI flags can be
-used to control how input is parsed:
+used to control how input is parsed. Stream failures print a concise message to
+stderr and exit with status 1; already-written NDJSON is not rolled back:
 
 ```
 Usage: csv-parser [filename?] [options]
