@@ -280,46 +280,63 @@ class CsvParser extends Transform {
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
     _flush(callback) {
-        if (this.bomPending?.length) {
-            const pending = this.bomPending;
-            this.bomPending = undefined;
-            return this.scan(pending, (error) => {
-                if (error) return callback(error);
-                this._flush(callback);
-            });
-        }
-        if (this.state.pendingComment) {
-            return this.scan(
-                Buffer.alloc(0),
-                (error) => {
-                    if (error) return callback(error);
-                    this._flush(callback);
-                },
-                true,
-            );
-        }
-        if (this.state.pendingCr && this._prev) {
-            this.fragments.push(this._prev);
-            this.fragmentBytes += this._prev.length;
+        const release = () => {
+            this.fragments = [];
+            this.fragmentBytes = 0;
             // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
             this._prev = null;
-        }
-        if (this.options.strictQuotes) {
-            if (this.state.quoted && !this.state.pendingQuote) {
-                return callback(new Error('Unterminated quoted field'));
+            this.bomPending = undefined;
+        };
+        const finish = (error) => {
+            release();
+            callback(error);
+        };
+        try {
+            if (this.bomPending?.length) {
+                const pending = this.bomPending;
+                this.bomPending = undefined;
+                return this.scan(pending, (error) => {
+                    if (error) return finish(error);
+                    this._flush(callback);
+                });
             }
-            if (this.state.afterQuote && this.state.pendingCr && !this.state.first) {
-                return callback(new Error('Invalid character after closing quote'));
+            if (this.state.pendingComment) {
+                return this.scan(
+                    Buffer.alloc(0),
+                    (error) => {
+                        if (error) return finish(error);
+                        this._flush(callback);
+                    },
+                    true,
+                );
             }
+            if (this.state.pendingCr && this._prev) {
+                this.fragments.push(this._prev);
+                this.fragmentBytes += this._prev.length;
+                // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
+                this._prev = null;
+            }
+            if (this.options.strictQuotes) {
+                if (this.state.quoted && !this.state.pendingQuote) {
+                    return finish(new Error('Unterminated quoted field'));
+                }
+                if (this.state.afterQuote && this.state.pendingCr && !this.state.first) {
+                    return finish(new Error('Invalid character after closing quote'));
+                }
+            }
+            // A pending custom escape at EOF remains literal data in permissive mode.
+            if (!this.fragmentBytes) return finish();
+            const buffer =
+                this.fragments.length === 1
+                    ? this.fragments[0]
+                    : Buffer.concat(this.fragments, this.fragmentBytes);
+            const error = this.parseLine(buffer, 0, buffer.length + 1);
+            finish(error);
+        } catch (error) {
+            // Preserve synchronous mapping throws while releasing parser-owned storage.
+            release();
+            throw error;
         }
-        // A pending custom escape at EOF remains literal data in permissive mode.
-        if (!this.fragmentBytes) return callback();
-        const buffer =
-            this.fragments.length === 1
-                ? this.fragments[0]
-                : Buffer.concat(this.fragments, this.fragmentBytes);
-        const error = this.parseLine(buffer, 0, buffer.length + 1);
-        callback(error);
     }
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.

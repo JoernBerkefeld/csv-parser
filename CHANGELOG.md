@@ -21,10 +21,14 @@
   preserved; oversized records fail before combined record allocation. A synthetic
   checkout benchmark reports copying, elapsed time, sampled memory and short-row
   throughput without claiming a universal speedup. Readable backpressure within
-  large chunks and final-record carry release remain separate follow-ups.
+  large chunks remains a separate follow-up.
 
 ### Fixed
 
+- Release parser-owned final-record fragments and lookahead references when EOF
+  completes or fails, including mapping exceptions. Emitted raw buffers retain
+  their exact values and shared backing storage; caller-held values can still
+  keep that storage alive. EOF parsing, callbacks and error behavior are unchanged.
 - CLI `--skipComments` / `-c` accepts bare flags for `#` comments and retains
   space-separated custom markers. `--skipComments=<marker>` is unambiguous.
   README and help include filename-first bare flags, custom markers, stdin and

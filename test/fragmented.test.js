@@ -166,6 +166,124 @@ test.serial('raw fragmented output storage is not reused for later records', asy
     );
 });
 
+/**
+ * Assert that EOF no longer owns record or lookahead storage.
+ * @param {import('ava').ExecutionContext} t - Test assertions.
+ * @param {ReturnType<typeof csv>} parser - Completed parser.
+ * @returns {void} Checks reference state without relying on garbage collection.
+ */
+function assertReleased(t, parser) {
+    t.deepEqual(parser.fragments, []);
+    t.is(parser.fragmentBytes, 0);
+    // eslint-disable-next-line unicorn/no-null -- The parser preserves its inherited lookahead sentinel.
+    t.is(parser._prev, null);
+    t.is(parser.bomPending, undefined);
+}
+
+for (const [name, chunks, options, expected] of [
+    ['empty BOM-enabled input', [], { bom: true }, []],
+    ['single fragment', ['value'], { headers: ['v'] }, [{ v: 'value' }]],
+    ['multiple fragments', ['val', 'ue'], { headers: ['v'] }, [{ v: 'value' }]],
+    ['header only', ['va', 'lue'], {}, []],
+    ['comment', ['//', 'ignored "'], { skipComments: '//' }, []],
+    ['comment prefix mismatch', ['/'], { headers: ['v'], skipComments: '//' }, [{ v: '/' }]],
+    ['header CR lookahead', ['value\r'], {}, []],
+    ['quoted CR lookahead', ['"value"\r'], { headers: ['v'], strictQuotes: true }, undefined],
+    ['unterminated quote', ['"val', 'ue'], { headers: ['v'], strictQuotes: true }, undefined],
+    ['strict width', ['val', 'ue'], { headers: ['a', 'b'], strict: true }, undefined],
+    ['duplicate headers', ['a,', 'a'], {}, undefined],
+    ['overflow collision', ['a,', 'b'], { headers: ['_1'] }, undefined],
+    ['empty line', [' ', ' '], { skipEmptyLines: true }, []],
+    ['incomplete BOM', [Buffer.from([0xef, 0xbb])], { bom: true, headers: ['v'] }, [{ v: '�' }]],
+    ['BOM replay size error', [Buffer.from([0xef])], { bom: true, maxRowBytes: 0 }, undefined],
+    ['comment replay quote error', ['"'], { skipComments: '"x', strictQuotes: true }, undefined],
+]) {
+    test.serial(`EOF releases references: ${name}`, (t) => {
+        const parser = csv(options);
+        const rows = [];
+        parser.on('data', (row) => {
+            rows.push(row);
+        });
+        for (const chunk of chunks) parser.write(chunk);
+        let completions = 0;
+        parser._flush((error) => {
+            completions++;
+            assertReleased(t, parser);
+            if (expected === undefined) t.true(error instanceof Error);
+            else t.is(error, undefined);
+        });
+        t.is(completions, 1);
+        t.deepEqual(rows, expected ?? []);
+        parser.destroy();
+    });
+}
+
+for (const mapping of ['mapValues', 'mapHeaders']) {
+    test.serial(`EOF releases references before preserving thrown ${mapping}`, (t) => {
+        const failure = new Error('mapping failed');
+        const parser = csv({
+            ...(mapping === 'mapValues' && { headers: ['v'] }),
+            [mapping]: () => {
+                throw failure;
+            },
+        });
+        parser.write('val');
+        parser.write('ue');
+        let completions = 0;
+        t.is(
+            t.throws(() => parser._flush(() => completions++)),
+            failure,
+        );
+        t.is(completions, 0);
+        assertReleased(t, parser);
+        parser.destroy();
+    });
+}
+
+for (const chunks of [['"a""b"'], ['"a"', '"b"']]) {
+    test.serial(
+        `raw EOF values survive reference release: ${chunks.length} fragments`,
+        async (t) => {
+            const parser = csv({ headers: ['v'], raw: true });
+            const rows = [];
+            await pipeline(
+                chunks.map((chunk) => Buffer.from(chunk)),
+                parser,
+                new Writable({
+                    objectMode: true,
+                    write(row, encoding, callback) {
+                        rows.push(row.v);
+                        callback();
+                    },
+                }),
+            );
+            assertReleased(t, parser);
+            t.deepEqual(rows, [Buffer.from('a"b')]);
+        },
+    );
+}
+
+test.serial('earlier raw values survive EOF error reference release', async (t) => {
+    const parser = csv({ headers: ['v'], raw: true, strictQuotes: true });
+    const rows = [];
+    await t.throwsAsync(
+        pipeline(
+            [Buffer.from('"a""'), Buffer.from('b"\n"unter'), Buffer.from('minated')],
+            parser,
+            new Writable({
+                objectMode: true,
+                write(row, encoding, callback) {
+                    rows.push(row.v);
+                    callback();
+                },
+            }),
+        ),
+        { message: 'Unterminated quoted field' },
+    );
+    assertReleased(t, parser);
+    t.deepEqual(rows, [Buffer.from('a"b')]);
+});
+
 test.serial('reject oversized fragmented rows before assembling them', (t) => {
     const parser = csv({ headers: ['value'], maxRowBytes: 8 });
     const errors = [];

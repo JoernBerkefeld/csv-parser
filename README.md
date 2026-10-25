@@ -57,8 +57,11 @@ inside an input chunk use that buffer directly. Run `node scripts/fragmented-ben
 from a checkout for synthetic long-record copy counts, sampled memory, short-row
 throughput and a slow-consumer queue baseline. Timings are machine- and data-dependent,
 not a general speed guarantee. Storage still depends on the current record, chunk,
-stream queues and caller-retained raw buffers; this change does not bound readable
-queue growth within a large input chunk or release final-record carry storage.
+stream queues and caller-retained raw buffers. At EOF, parser-owned final-record
+and lookahead references are released on completion or failure without clearing or
+reusing the backing storage of emitted raw values. Caller-retained raw buffers can
+still keep that storage alive. Readable queue growth within a large input chunk
+remains a separate limitation.
 
 ⚡️ `csv-parser` is greased-lightning fast
 
