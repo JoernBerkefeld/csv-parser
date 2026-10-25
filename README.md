@@ -329,7 +329,13 @@ Type: `Boolean`<br>
 Default: `false`
 
 If `true`, instructs the parser that the number of columns in each row must match
-the number of `headers` specified or throws an exception.
+the number of `headers` specified. A mismatch terminates the stream with one
+`RangeError`, including for a final row without a newline. No later rows are
+emitted or mapped, even when an `error` listener is attached. `pipeline()` and
+async iteration reject; `validateFile()` rejects with that error as its cause.
+Values in the failing row are mapped before its width is checked.
+`headers: false` still disables this check.
+
 if `false`: the headers are mapped to the column index
 less columns: any missing column in the middle will result in a wrong property mapping!
 more columns: the aditional columns will create a "_"+index properties - eg. "_10":"value"

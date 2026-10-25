@@ -230,12 +230,10 @@ class CsvParser extends Transform {
         }
 
         if (this.options.strict && cells.length !== this.headers.length) {
-            const error = new RangeError('Row length does not match headers');
-            this.emit('error', error);
-        } else {
-            const byteOffset = this.bytesRead - buffer.length + start;
-            this.writeRow(cells, byteOffset);
+            return new RangeError('Row length does not match headers');
         }
+        const byteOffset = this.bytesRead - buffer.length + start;
+        this.writeRow(cells, byteOffset);
     }
 
     parseValue(buffer, start, end) {

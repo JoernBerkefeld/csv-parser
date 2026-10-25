@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Strict column-count mismatches now terminate the parser through stream
+  completion with one `RangeError`, including at EOF. Later records are neither
+  emitted nor mapped in the same or subsequent chunks, including when an error
+  listener is attached. Pipelines, async iteration and `validateFile` share the
+  terminal failure; permissive widths and `headers: false` remain unchanged.
 - Recognize `skipComments` markers before interpreting CSV quotes, preventing
   an unterminated quote in a comment from swallowing later records. Custom
   markers now match their complete UTF-8 byte sequence, including across chunks;

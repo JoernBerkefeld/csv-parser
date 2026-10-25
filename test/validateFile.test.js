@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { syncBuiltinESMExports } from 'node:module';
-import { Readable } from 'node:stream';
+import { Readable, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import test from 'ava';
 import csv, { validateFile } from '../index.js';
@@ -198,6 +198,51 @@ test.serial(
         }
     },
 );
+
+for (const ending of ['\n', '']) {
+    test.serial(
+        `validateFile stops mappings after strict width failure: ${JSON.stringify(ending)}`,
+        async (t) => {
+            const text = `a,b\ngood,row\nshort${ending}${ending ? 'later,row\n' : ''}`;
+            const file = await fixture(text);
+            const validationMappings = [];
+            const parserMappings = [];
+            const validationError = await t.throwsAsync(
+                validateFile(file, {
+                    strict: true,
+                    mapValues: ({ value }) => {
+                        validationMappings.push(value);
+                        return value;
+                    },
+                }),
+            );
+            const parser = csv({
+                strict: true,
+                mapValues: ({ value }) => {
+                    parserMappings.push(value);
+                    return value;
+                },
+            });
+            const parserError = await t.throwsAsync(
+                pipeline(
+                    Readable.from([text]),
+                    parser,
+                    new Writable({
+                        objectMode: true,
+                        write(row, encoding, callback) {
+                            callback();
+                        },
+                    }),
+                ),
+            );
+            t.true(validationError.cause instanceof RangeError);
+            t.is(validationError.cause.message, parserError.message);
+            t.true(validationError.message.includes(file));
+            t.deepEqual(validationMappings, ['good', 'row', 'short']);
+            t.deepEqual(parserMappings, validationMappings);
+        },
+    );
+}
 
 test.serial('validateFile does not enable either strictness option', async (t) => {
     const file = await fixture('a,b\n"open');
