@@ -96,6 +96,9 @@ class CsvParser extends Transform {
 
         // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
         this._prev = null;
+        this.fragments = [];
+        this.fragmentBytes = 0;
+        this.recordOffset = 0;
 
         if (options.headers === false) {
             // enforce, as the column length check will fail if headers:false
@@ -143,7 +146,7 @@ class CsvParser extends Transform {
         return this.parseValue(buffer, start, y);
     }
 
-    parseLine(buffer, start, end) {
+    parseLine(buffer, start, end, byteOffset = this.recordOffset) {
         const { customNewline, escape, mapHeaders, mapValues, quote, separator, skipLines } =
             this.options;
 
@@ -242,11 +245,9 @@ class CsvParser extends Transform {
             return;
         }
 
-        if (this.options.strict && cells.length !== this.headers.length) {
-            return new RangeError('Row length does not match headers');
-        }
-        const byteOffset = this.bytesRead - buffer.length + start;
-        return this.writeRow(cells, byteOffset);
+        return this.options.strict && cells.length !== this.headers.length
+            ? new RangeError('Row length does not match headers')
+            : this.writeRow(cells, byteOffset);
     }
 
     parseValue(buffer, start, end) {
@@ -297,6 +298,12 @@ class CsvParser extends Transform {
                 true,
             );
         }
+        if (this.state.pendingCr && this._prev) {
+            this.fragments.push(this._prev);
+            this.fragmentBytes += this._prev.length;
+            // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
+            this._prev = null;
+        }
         if (this.options.strictQuotes) {
             if (this.state.quoted && !this.state.pendingQuote) {
                 return callback(new Error('Unterminated quoted field'));
@@ -306,8 +313,12 @@ class CsvParser extends Transform {
             }
         }
         // A pending custom escape at EOF remains literal data in permissive mode.
-        if (!this._prev) return callback();
-        const error = this.parseLine(this._prev, this.state.previousEnd, this._prev.length + 1); // plus since online -1s
+        if (!this.fragmentBytes) return callback();
+        const buffer =
+            this.fragments.length === 1
+                ? this.fragments[0]
+                : Buffer.concat(this.fragments, this.fragmentBytes);
+        const error = this.parseLine(buffer, 0, buffer.length + 1);
         callback(error);
     }
 
@@ -330,7 +341,10 @@ class CsvParser extends Transform {
                 return callback();
             }
             this.bomPending = undefined;
-            if (index === utf8Bom.length) data = data.subarray(utf8Bom.length);
+            if (index === utf8Bom.length) {
+                data = data.subarray(utf8Bom.length);
+                this.recordOffset += utf8Bom.length;
+            }
         }
         this.scan(data, callback);
     }
@@ -344,35 +358,46 @@ class CsvParser extends Transform {
      */
     scan(data, callback, isFinal = false) {
         const { escape, quote } = this.options;
-        let start = 0;
         let buffer = data;
-
         if (this._prev) {
-            start = this._prev.length;
-            if (this.state.pendingComment) {
-                start = this.state.previousEnd;
-                this.state.pendingComment = false;
-            }
+            // Replay only enough bytes to decide the marker or CR, not the whole chunk.
+            const needed = this.state.pendingComment
+                ? this.commentMarker.length - this._prev.length
+                : 1;
+            buffer = Buffer.concat([this._prev, data.subarray(0, needed)]);
+            // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
+            this._prev = null;
+            this.state.pendingComment = false;
             if (this.state.pendingCr) {
-                // Revisit only the undecided CR; its byte was already counted.
-                start--;
                 this.state.rowLength--;
                 this.state.pendingCr = false;
             }
-            buffer = Buffer.concat([this._prev, data]);
-            // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
-            this._prev = null;
+            if (data.length > needed) {
+                return this.scan(
+                    buffer,
+                    (error) => {
+                        if (error) return callback(error);
+                        this.scan(data.subarray(needed), callback, isFinal);
+                    },
+                    isFinal,
+                );
+            }
         }
-
+        this.state.previousEnd = 0;
         const bufferLength = buffer.length;
+        let retainedEnd = bufferLength;
 
-        for (let index = start; index < bufferLength; index++) {
+        for (let index = 0; index < bufferLength; index++) {
             const chr = buffer[index];
             // eslint-disable-next-line unicorn/no-null -- Keep the inherited EOF lookahead sentinel for custom option comparisons.
             const nextChr = index + 1 < bufferLength ? buffer[index + 1] : null;
 
             // Decide the complete record-start marker before interpreting any CSV quotes.
-            if (index === this.state.previousEnd && this.commentMarker.length > 0) {
+            if (
+                index === this.state.previousEnd &&
+                this.fragmentBytes === 0 &&
+                this.commentMarker.length > 0
+            ) {
                 const available = Math.min(this.commentMarker.length, bufferLength - index);
                 const matches = buffer
                     .subarray(index, index + available)
@@ -382,6 +407,8 @@ class CsvParser extends Transform {
                         return callback(new Error('Row exceeds the maximum size'));
                     }
                     this.state.pendingComment = true;
+                    retainedEnd = index;
+                    this._prev = buffer.subarray(index);
                     break;
                 }
                 this.state.comment = matches && available === this.commentMarker.length;
@@ -412,6 +439,8 @@ class CsvParser extends Transform {
                     if (chr === cr && !this.options.customNewline && this.options.newline === nl) {
                         if (index + 1 === bufferLength) {
                             this.state.pendingCr = true;
+                            retainedEnd = index;
+                            this._prev = buffer.subarray(index);
                             break;
                         }
                         if (nextChr !== nl && !this.state.first) {
@@ -449,6 +478,8 @@ class CsvParser extends Transform {
                     if (index + 1 === bufferLength) {
                         // Header CR needs one more byte to distinguish CRLF from CR.
                         this.state.pendingCr = true;
+                        retainedEnd = index;
+                        this._prev = buffer.subarray(index);
                         break;
                     }
                     if (nextChr !== nl) this.options.newline = cr;
@@ -459,9 +490,21 @@ class CsvParser extends Transform {
                 continue;
             }
 
-            const error = this.parseLine(buffer, this.state.previousEnd, index + 1);
+            const end = index + 1;
+            const length = end - this.state.previousEnd;
+            let error;
+            if (this.fragmentBytes > 0) {
+                this.fragments.push(buffer.subarray(this.state.previousEnd, end));
+                const record = Buffer.concat(this.fragments, this.fragmentBytes + length);
+                error = this.parseLine(record, 0, record.length);
+                this.fragments = [];
+                this.fragmentBytes = 0;
+            } else {
+                error = this.parseLine(buffer, this.state.previousEnd, end);
+            }
             if (error) return callback(error);
-            this.state.previousEnd = index + 1;
+            this.recordOffset += this.state.rowLength;
+            this.state.previousEnd = end;
             this.state.rowLength = 0;
             this.state.fieldStart = true;
             this.state.malformedQuoted = false;
@@ -469,18 +512,11 @@ class CsvParser extends Transform {
             this.state.comment = false;
         }
 
-        if (this.state.previousEnd === bufferLength) {
-            this.state.previousEnd = 0;
-            return callback();
+        if (retainedEnd > this.state.previousEnd) {
+            const fragment = buffer.subarray(this.state.previousEnd, retainedEnd);
+            this.fragments.push(fragment);
+            this.fragmentBytes += fragment.length;
         }
-
-        if (bufferLength - this.state.previousEnd < data.length) {
-            this._prev = data;
-            this.state.previousEnd -= bufferLength - data.length;
-            return callback();
-        }
-
-        this._prev = buffer;
         callback();
     }
 }

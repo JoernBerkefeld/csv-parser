@@ -51,6 +51,15 @@ it is not an isolated parser throughput measurement. Filesystem and parser
 failures exit nonzero without printing a successful summary. Memory still depends
 on stream buffering and record size, not just the benchmark's counter.
 
+Fragmented records retain incoming slices and are assembled once at the record
+boundary, instead of repeatedly copying the growing record prefix. Records wholly
+inside an input chunk use that buffer directly. Run `node scripts/fragmented-bench.js`
+from a checkout for synthetic long-record copy counts, sampled memory, short-row
+throughput and a slow-consumer queue baseline. Timings are machine- and data-dependent,
+not a general speed guarantee. Storage still depends on the current record, chunk,
+stream queues and caller-retained raw buffers; this change does not bound readable
+queue growth within a large input chunk or release final-record carry storage.
+
 ⚡️ `csv-parser` is greased-lightning fast
 
 ```console

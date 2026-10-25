@@ -72,7 +72,7 @@ async function measure(count, separator, hasBom = false) {
         seen++;
         maxReadable = Math.max(maxReadable, parser.readableLength);
         maxWritable = Math.max(maxWritable, parser.writableLength);
-        maxPrevious = Math.max(maxPrevious, parser._prev?.length || 0);
+        maxPrevious = Math.max(maxPrevious, parser.fragmentBytes + (parser._prev?.length || 0));
         if (seen % 128 !== 0) continue;
         // Await each synthetic upload batch; never accumulate an output list.
         await setImmediate();

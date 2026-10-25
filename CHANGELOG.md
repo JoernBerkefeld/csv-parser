@@ -13,6 +13,16 @@
   mode. TypeScript declarations share the option; the CLI exposes it through
   `--skipEmptyLines` with the same default-off behavior.
 
+### Changed
+
+- Fragmented records now retain slices and assemble once when complete, replacing
+  repeated growing-prefix copies. Single-chunk records retain the direct-buffer
+  path. Physical offsets, raw-buffer sharing, scanner lookahead and row limits are
+  preserved; oversized records fail before combined record allocation. A synthetic
+  checkout benchmark reports copying, elapsed time, sampled memory and short-row
+  throughput without claiming a universal speedup. Readable backpressure within
+  large chunks and final-record carry release remain separate follow-ups.
+
 ### Fixed
 
 - CLI `--skipComments` / `-c` accepts bare flags for `#` comments and retains
