@@ -20,8 +20,14 @@
   path. Physical offsets, raw-buffer sharing, scanner lookahead and row limits are
   preserved; oversized records fail before combined record allocation. A synthetic
   checkout benchmark reports copying, elapsed time, sampled memory and short-row
-  throughput without claiming a universal speedup. Readable backpressure within
-  large chunks remains a separate follow-up.
+  throughput without claiming a universal speedup.
+- Honor readable backpressure inside input chunks: stop after publishing the row
+  that fills the queue, retain the untouched remainder, and resume on demand.
+  Slow sinks and awaited batches no longer queue an entire multi-record chunk.
+  Cancellation releases paused input and settles its transform callback once;
+  mapping exceptions during resumed scanning become terminal stream errors.
+  Synchronous mappings keep their existing throw behavior. Memory still depends
+  on input chunk/current-record storage and caller-retained raw buffers.
 
 ### Fixed
 

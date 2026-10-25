@@ -60,8 +60,13 @@ not a general speed guarantee. Storage still depends on the current record, chun
 stream queues and caller-retained raw buffers. At EOF, parser-owned final-record
 and lookahead references are released on completion or failure without clearing or
 reusing the backing storage of emitted raw values. Caller-retained raw buffers can
-still keep that storage alive. Readable queue growth within a large input chunk
-remains a separate limitation.
+still keep that storage alive. Parsing now pauses after a published row fills the
+readable queue and resumes on readable demand, including within one large input
+chunk. Slow sinks and awaited async-iterator batches therefore do not expand the
+whole chunk into queued row objects. Input chunk/current-record storage and
+caller-retained raw buffers still matter; this is not a file-size-independent
+memory guarantee. Mapping failures encountered after resumption become stream
+errors; mappings reached synchronously retain their existing throw behavior.
 
 ⚡️ `csv-parser` is greased-lightning fast
 

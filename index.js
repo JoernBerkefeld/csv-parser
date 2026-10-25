@@ -275,7 +275,50 @@ class CsvParser extends Transform {
             }
         }
 
-        this.push(this.options.outputByteOffset ? { row, byteOffset } : row);
+        return this.push(this.options.outputByteOffset ? { row, byteOffset } : row);
+    }
+
+    // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
+    _read(size) {
+        if (!this.pendingScan) return super._read(size);
+        const { buffer, callback, isFinal } = this.pendingScan;
+        this.pendingScan = undefined;
+        let isCompleted = false;
+        const finish = (error) => {
+            isCompleted = true;
+            callback(error);
+        };
+        try {
+            this.scan(buffer, finish, isFinal);
+        } catch (error_) {
+            // Resumed mappings no longer have the original write caller to catch them.
+            const error =
+                error_ instanceof Error ? error_ : new Error(String(error_), { cause: error_ });
+            if (isCompleted) this.destroy(error);
+            else finish(error);
+            return;
+        }
+        // Do not accumulate completion wrappers across repeated demand cycles.
+        if (this.pendingScan?.callback === finish) this.pendingScan.callback = callback;
+        if (!this.pendingScan && !this.destroyed) super._read(size);
+    }
+
+    // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
+    _destroy(error, callback) {
+        const pending = this.pendingScan;
+        this.pendingScan = undefined;
+        this.fragments = [];
+        this.fragmentBytes = 0;
+        // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
+        this._prev = null;
+        this.bomPending = undefined;
+        if (pending) {
+            const failure =
+                error ||
+                Object.assign(new Error('Parser destroyed'), { code: 'ERR_STREAM_DESTROYED' });
+            pending.callback(failure);
+        }
+        callback(error);
     }
 
     // eslint-disable-next-line unicorn/prefer-private-class-fields -- Node Transform invokes this public stream override by name.
@@ -330,8 +373,8 @@ class CsvParser extends Transform {
                 this.fragments.length === 1
                     ? this.fragments[0]
                     : Buffer.concat(this.fragments, this.fragmentBytes);
-            const error = this.parseLine(buffer, 0, buffer.length + 1);
-            finish(error);
+            const result = this.parseLine(buffer, 0, buffer.length + 1);
+            finish(result instanceof Error ? result : undefined);
         } catch (error) {
             // Preserve synchronous mapping throws while releasing parser-owned storage.
             release();
@@ -509,17 +552,17 @@ class CsvParser extends Transform {
 
             const end = index + 1;
             const length = end - this.state.previousEnd;
-            let error;
+            let result;
             if (this.fragmentBytes > 0) {
                 this.fragments.push(buffer.subarray(this.state.previousEnd, end));
                 const record = Buffer.concat(this.fragments, this.fragmentBytes + length);
-                error = this.parseLine(record, 0, record.length);
+                result = this.parseLine(record, 0, record.length);
                 this.fragments = [];
                 this.fragmentBytes = 0;
             } else {
-                error = this.parseLine(buffer, this.state.previousEnd, end);
+                result = this.parseLine(buffer, this.state.previousEnd, end);
             }
-            if (error) return callback(error);
+            if (result instanceof Error) return callback(result);
             this.recordOffset += this.state.rowLength;
             this.state.previousEnd = end;
             this.state.rowLength = 0;
@@ -527,6 +570,12 @@ class CsvParser extends Transform {
             this.state.malformedQuoted = false;
             this.state.afterQuote = false;
             this.state.comment = false;
+            if (this.destroyed) return callback();
+            if (result === false) {
+                // The published row is complete; resume at the next untouched record.
+                this.pendingScan = { buffer: buffer.subarray(end), callback, isFinal };
+                return;
+            }
         }
 
         if (retainedEnd > this.state.previousEnd) {

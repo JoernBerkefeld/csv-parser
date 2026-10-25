@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
-import { performance } from 'node:perf_hooks';
+import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { setImmediate } from 'node:timers';
@@ -83,13 +83,17 @@ for (let run = 0; run < 3; run++) {
     console.log(JSON.stringify({ kind: 'short', run, ...result }));
 }
 /**
- * Characterize the existing one-chunk readable queue without optimizing it.
+ * Measure the bounded one-chunk readable queue, memory and event-loop delay.
  * @returns {Promise<void>} Completes after draining the slow sink.
  */
 async function measureSlow() {
     let maxReadable = 0;
     let seen = 0;
     const parser = csv({ headers: ['value'] });
+    const baseline = process.memoryUsage();
+    const peak = { ...baseline };
+    const delay = monitorEventLoopDelay({ resolution: 1 });
+    delay.enable();
     const start = performance.now();
     await pipeline(
         [Buffer.from('value\n'.repeat(2000))],
@@ -100,12 +104,28 @@ async function measureSlow() {
                 assert.equal(row.value, 'value');
                 seen++;
                 maxReadable = Math.max(maxReadable, parser.readableLength);
+                if (seen % 128 === 0) {
+                    const memory = process.memoryUsage();
+                    for (const key of ['rss', 'heapUsed', 'external', 'arrayBuffers'])
+                        peak[key] = Math.max(peak[key], memory[key]);
+                }
                 setImmediate(callback);
             },
         }),
     );
+    delay.disable();
+    assert.equal(seen, 2000);
+    assert.ok(maxReadable <= parser.readableHighWaterMark);
     console.log(
-        JSON.stringify({ kind: 'slow', rows: seen, maxReadable, ms: performance.now() - start }),
+        JSON.stringify({
+            kind: 'slow',
+            rows: seen,
+            maxReadable,
+            ms: performance.now() - start,
+            eventLoopMaxMs: delay.max / 1e6,
+            baseline,
+            peak,
+        }),
     );
 }
 await measureSlow();
