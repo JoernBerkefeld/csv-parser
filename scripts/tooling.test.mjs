@@ -74,9 +74,10 @@ test('benchmark preserves row counts and two-significant-digit millisecond outpu
     const nested = path.join(fixtures, 'nested');
     const discovered = path.join(nested, 'glob-é漢.csv');
     const ignored = path.join(fixtures, 'ignored.txt');
+    const invalid = path.join(root, 'duplicate-headers.csv');
     writeFileSync(
         path.join(root, 'registered.json'),
-        JSON.stringify([input, loader, fixtures, nested, discovered, ignored]),
+        JSON.stringify([input, loader, fixtures, nested, discovered, ignored, invalid]),
     );
     mkdirSync(nested, { recursive: true });
     writeFileSync(input, 'name,value\nalpha,1\nbeta,2\n');
@@ -126,6 +127,23 @@ test('benchmark preserves row counts and two-significant-digit millisecond outpu
     assert.ok(globMatch, globbed.stdout);
     assert.equal(Number(globMatch[1]).toPrecision(2), globMatch[1]);
     assert.doesNotMatch(globbed.stdout, /ignored|synthetic/);
+
+    writeFileSync(invalid, 'name,name\nalpha,beta\n');
+    for (const [filename, reason] of [
+        [path.join(root, 'missing.csv'), /ENOENT/],
+        [invalid, /Duplicate header: name/],
+    ]) {
+        const failed = spawnSync(process.execPath, [bench, filename], {
+            encoding: 'utf8',
+            env: environment,
+            timeout: 10 * 1000,
+        });
+        assert.equal(failed.error, undefined);
+        assert.equal(failed.status, 1, failed.stderr);
+        assert.match(failed.stderr, reason);
+        assert.doesNotMatch(failed.stderr, /Unhandled 'error' event/);
+        assert.doesNotMatch(failed.stdout, /Rows Parsed/);
+    }
 
     // Reject genuinely asynchronous benchmark discovery, not an uncaught stream error.
     writeFileSync(

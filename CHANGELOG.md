@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- The checkout benchmark now counts emitted data rows without retaining them and
+  awaits the complete stream pipeline. Filesystem and parser failures terminate
+  unsuccessfully instead of hanging or reporting an incomplete success. Table
+  layout, row counts and two-significant-digit millisecond output are preserved.
+  This tooling change does not alter parser behavior or claim a parser speedup.
+
 ## [4.2.0] — 2026-10-24
 
 ### Added

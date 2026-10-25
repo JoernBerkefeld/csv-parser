@@ -42,6 +42,15 @@ the default factory API and permissive quote handling unless explicitly enabled.
 
 ## Benchmarks
 
+From a repository checkout, `node bin/bench <filename>` streams the file through
+an object-mode counting sink without retaining parsed rows. With no filename,
+it discovers the checkout's CSV fixtures. The report keeps the filename, emitted
+data-row count (excluding inferred headers), and elapsed milliseconds to two
+significant digits. Timing includes reading, parsing and draining the pipeline;
+it is not an isolated parser throughput measurement. Filesystem and parser
+failures exit nonzero without printing a successful summary. Memory still depends
+on stream buffering and record size, not just the benchmark's counter.
+
 ⚡️ `csv-parser` is greased-lightning fast
 
 ```console

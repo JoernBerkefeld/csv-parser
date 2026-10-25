@@ -5,6 +5,8 @@ import { globby } from 'globby';
 import chalk from 'chalk';
 import table from 'text-table';
 import { performance } from 'node:perf_hooks';
+import { Writable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import strip from 'strip-ansi';
 
 import csv from '../index.js';
@@ -15,24 +17,23 @@ const run = async () => {
 
     const filePaths = Array.isArray(paths) ? paths : [paths];
     for (const filePath of filePaths) {
-        await new Promise((resolve) => {
-            let rowsParsed = 0;
-            const start = performance.now();
-            const data = [];
-            createReadStream(filePath)
-                .pipe(csv())
-                .on('data', (line) => {
+        let rowsParsed = 0;
+        const start = performance.now();
+        await pipeline(
+            createReadStream(filePath),
+            csv(),
+            new Writable({
+                objectMode: true,
+                write(row, encoding, callback) {
                     rowsParsed++;
-                    data.push(line);
-                })
-                .on('finish', () => {
-                    const duration = (performance.now() - start).toPrecision(2);
-                    const color = duration <= 10 ? 'green' : duration > 100 ? 'red' : 'yellow';
-                    const fileName = chalk.blue(path.basename(filePath));
-                    rows.push(['', fileName, rowsParsed, chalk[color](`${duration}ms`)]);
-                    resolve();
-                });
-        });
+                    callback();
+                },
+            }),
+        );
+        const duration = (performance.now() - start).toPrecision(2);
+        const color = duration <= 10 ? 'green' : duration > 100 ? 'red' : 'yellow';
+        const fileName = chalk.blue(path.basename(filePath));
+        rows.push(['', fileName, rowsParsed, chalk[color](`${duration}ms`)]);
     }
 
     rows.unshift(['', 'Filename', 'Rows Parsed', 'Duration'].map((h) => chalk.dim.underline(h)));
