@@ -15,6 +15,8 @@
 
 ### Fixed
 
+- CLI `--escape` / `-e` now forwards custom escapes, while omitting it preserves
+  the selected quote character as the parser's escape default.
 - CLI `--quote` / `-q` now forwards the selected quote character to the parser.
 - CLI `--remove <names>` now parses the comma-separated list and maps inferred
   headers using the parser's `{ header }` callback contract.

@@ -103,6 +103,19 @@ for (const flag of ['--quote', '-q']) {
     });
 }
 
+for (const flag of ['--escape', '-e']) {
+    test(`CLI forwards custom escapes through ${flag}`, async (t) => {
+        const result = await execa(process.execPath, [binPath, '--quote', "'", flag, '!'], {
+            input: "a,b\n'it!'s','one,two'\n",
+        });
+        t.deepEqual(JSON.parse(result.stdout), { a: "it's", b: 'one,two' });
+        const defaultQuote = await execa(process.execPath, [binPath, flag, '!'], {
+            input: 'a\n"say !"hi!""\n',
+        });
+        t.deepEqual(JSON.parse(defaultQuote.stdout), { a: 'say "hi"' });
+    });
+}
+
 test('CLI help advertises skipEmptyLines', async (t) => {
     const result = await execa(process.execPath, [binPath, '--help'], { reject: false });
     t.regex(result.stderr, /--skipEmptyLines\s+Skip empty and whitespace-only unquoted records/);

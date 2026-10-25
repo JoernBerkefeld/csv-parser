@@ -17,7 +17,7 @@ function parseArguments() {
     let skipEmptyLines;
     let strict;
     let remove;
-    let escape = '"';
+    let escape;
     let headers;
     let output;
     let quote = '"';
@@ -147,6 +147,10 @@ const options = {
     skipEmptyLines: argv.skipEmptyLines,
     skipLines: argv.skipLines,
 };
+
+if (argv.escape !== undefined) {
+    options.escape = argv.escape;
+}
 
 if (argv.headers) {
     options.headers = argv.headers.toString().split(argv.separator);

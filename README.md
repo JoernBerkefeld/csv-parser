@@ -541,7 +541,9 @@ names and values; unknown names are ignored. As with the parser API, explicit
 `--headers` bypasses header mapping, so `--remove` applies only to inferred headers.
 
 Choose a custom quote character with `--quote` or `-q`, for example
-`csv-parser input.csv --quote "'"` for apostrophe-quoted fields.
+`csv-parser input.csv --quote "'"` for apostrophe-quoted fields. The escape character
+defaults to that quote character. Override it with `--escape` or `-e`, for example
+`csv-parser input.csv --quote "'" --escape "!"` for `!'` escapes.
 
 For example; to parse a TSV file:
 
