@@ -322,7 +322,8 @@ remain data. The original record is checked before quoted cells are decoded,
 including with `raw: true`. Physical byte offsets are unchanged, and ignored
 records still count toward `maxRowBytes`. EOF does not create an extra record.
 Omitting the option or setting `false` preserves existing blank-record behavior,
-including strict width errors. This option is currently API-only, not a CLI flag.
+including strict width errors. The CLI exposes the same opt-in behavior through
+`--skipEmptyLines`, for example `csv-parser input.csv --skipEmptyLines`.
 
 ```js
 const options = { skipEmptyLines: true, strict: true };
@@ -522,6 +523,7 @@ Usage: csv-parser [filename?] [options]
   --remove            Remove columns from output by header name
   --separator,-s      Set the separator character ("," by default)
   --skipComments,-c   Skip CSV comments that begin with '#'. Set a value to change the comment character.
+  --skipEmptyLines    Skip empty and whitespace-only unquoted records
   --skipLines,-l      Set the number of lines to skip to before parsing headers
   --strict            Require column length match headers length
   --version,-v        Print out the installed version

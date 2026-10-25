@@ -10,7 +10,8 @@
   multiline quoted values remain data. JavaScript whitespace is recognized
   except unstripped BOMs; only `bom: true` removes one leading BOM. Physical
   offsets and record-size limits remain unchanged, including at EOF and in raw
-  mode. TypeScript declarations share the option; CLI exposure is separate.
+  mode. TypeScript declarations share the option; the CLI exposes it through
+  `--skipEmptyLines` with the same default-off behavior.
 
 ### Fixed
 

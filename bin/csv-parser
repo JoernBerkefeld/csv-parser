@@ -13,6 +13,7 @@ const package_ = JSON.parse(fs.readFileSync(new URL('../package.json', import.me
  */
 function parseArguments() {
     let skipComments;
+    let skipEmptyLines;
     let escape = '"';
     let headers;
     let output;
@@ -30,6 +31,10 @@ function parseArguments() {
             case '--skipComments':
             case '-c': {
                 skipComments = arguments_[++index];
+                continue;
+            }
+            case '--skipEmptyLines': {
+                skipEmptyLines = true;
                 continue;
             }
             case '--escape':
@@ -79,6 +84,7 @@ function parseArguments() {
     }
     return {
         skipComments,
+        skipEmptyLines,
         escape,
         headers,
         output,
@@ -109,6 +115,7 @@ if (argv.help || (!filename && process.stdin.isTTY)) {
   --remove            Remove headers from output
   --separator,-s      Set the separator character ("," by default)
   --skipComments,-c   Skip CSV comments that begin with '#'. Set a value to change the comment character.
+  --skipEmptyLines    Skip empty and whitespace-only unquoted records
   --skipLines,-l      Set the number of lines to skip to before parsing headers
   --strict            Require column length match headers length
   --version,-v        Print out the installed version
@@ -123,6 +130,7 @@ const options = {
     separator: argv.separator,
     strict: argv.strict,
     skipComments: argv.skipComments,
+    skipEmptyLines: argv.skipEmptyLines,
     skipLines: argv.skipLines,
 };
 
