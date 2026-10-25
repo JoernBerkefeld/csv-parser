@@ -291,7 +291,18 @@ Specifies a single-character string to use as the column separator for each row.
 Type: `Boolean | String`<br>
 Default: `false`
 
-Instructs the parser to ignore lines which represent comments in a CSV file. Since there is no specification that dictates what a CSV comment looks like, comments should be considered non-standard. The "most common" character used to signify a comment in a CSV file is `"#"`. If this option is set to `true`, lines which begin with `#` will be skipped. If a custom character is needed to denote a commented line, this option may be set to a string which represents the leading character(s) signifying a comment line.
+Ignores non-standard comment records. Set `true` to skip records beginning with
+`#`, or supply a string such as `'//'` to match that complete marker. Matching is
+exact at the record start, without trimming whitespace, and supports Unicode
+markers and markers split across stream chunks. An incomplete marker at EOF or
+a prefix mismatch remains ordinary CSV data; an empty marker skips nothing.
+
+Comments are recognized before CSV quote handling, so quotes and separators in
+a comment cannot consume later records. Comment text ends at the physical record
+ending, using the detected or configured newline. A marker inside quoted
+multiline content remains data. Comments do not invoke mappings or count toward
+`skipLines`; their bytes still count toward `maxRowBytes` and physical output
+byte offsets. With `bom: true`, matching starts after the stripped leading BOM.
 
 #### skipLines
 

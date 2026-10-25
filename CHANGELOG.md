@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Recognize `skipComments` markers before interpreting CSV quotes, preventing
+  an unterminated quote in a comment from swallowing later records. Custom
+  markers now match their complete UTF-8 byte sequence, including across chunks;
+  partial-prefix mismatches and incomplete EOF prefixes remain data. Markers in
+  quoted multiline fields remain data. Comment exclusion from `skipLines`,
+  mapping boundaries, physical offsets and record-size enforcement are retained.
 - The checkout benchmark now counts emitted data rows without retaining them and
   awaits the complete stream pipeline. Filesystem and parser failures terminate
   unsuccessfully instead of hanging or reporting an incomplete success. Table

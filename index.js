@@ -89,6 +89,8 @@ class CsvParser extends Transform {
             pendingQuote: false,
             pendingCr: false,
             afterQuote: false,
+            comment: false,
+            pendingComment: false,
         };
 
         // eslint-disable-next-line unicorn/no-null -- Preserve the inherited stream's observable buffer sentinel.
@@ -105,6 +107,9 @@ class CsvParser extends Transform {
 
         this.options = options;
         this.headers = options.headers;
+        this.commentMarker = options.skipComments
+            ? Buffer.from(typeof options.skipComments === 'string' ? options.skipComments : '#')
+            : Buffer.alloc(0);
         this.bytesRead = 0;
         this.bomPending = options.bom ? Buffer.alloc(0) : undefined;
     }
@@ -138,28 +143,15 @@ class CsvParser extends Transform {
     }
 
     parseLine(buffer, start, end) {
-        const {
-            customNewline,
-            escape,
-            mapHeaders,
-            mapValues,
-            quote,
-            separator,
-            skipComments,
-            skipLines,
-        } = this.options;
+        const { customNewline, escape, mapHeaders, mapValues, quote, separator, skipLines } =
+            this.options;
 
         end--; // trim newline
         if (!customNewline && buffer.length > 0 && buffer[end - 1] === cr) {
             end--;
         }
 
-        if (skipComments) {
-            const char = typeof skipComments === 'string' ? skipComments : '#';
-            if (buffer[start] === Buffer.from(char)[0]) {
-                return;
-            }
-        }
+        if (this.state.comment) return;
 
         const skip = skipLines && skipLines > this.state.lineNumber;
         this.state.lineNumber++;
@@ -284,6 +276,16 @@ class CsvParser extends Transform {
                 this._flush(callback);
             });
         }
+        if (this.state.pendingComment) {
+            return this.scan(
+                Buffer.alloc(0),
+                (error) => {
+                    if (error) return callback(error);
+                    this._flush(callback);
+                },
+                true,
+            );
+        }
         if (this.options.strictQuotes) {
             if (this.state.quoted && !this.state.pendingQuote) {
                 return callback(new Error('Unterminated quoted field'));
@@ -326,15 +328,20 @@ class CsvParser extends Transform {
      * Scan effective CSV bytes, including a replayed incomplete BOM prefix.
      * @param {Buffer} data - Bytes not yet seen by the CSV state machine.
      * @param {(error?: Error) => void} callback - Transform completion callback.
+     * @param {boolean} [isFinal] - Resolve an incomplete comment prefix at EOF.
      * @returns {void} Completes through the callback.
      */
-    scan(data, callback) {
+    scan(data, callback, isFinal = false) {
         const { escape, quote } = this.options;
         let start = 0;
         let buffer = data;
 
         if (this._prev) {
             start = this._prev.length;
+            if (this.state.pendingComment) {
+                start = this.state.previousEnd;
+                this.state.pendingComment = false;
+            }
             if (this.state.pendingCr) {
                 // Revisit only the undecided CR; its byte was already counted.
                 start--;
@@ -353,58 +360,76 @@ class CsvParser extends Transform {
             // eslint-disable-next-line unicorn/no-null -- Keep the inherited EOF lookahead sentinel for custom option comparisons.
             const nextChr = index + 1 < bufferLength ? buffer[index + 1] : null;
 
+            // Decide the complete record-start marker before interpreting any CSV quotes.
+            if (index === this.state.previousEnd && this.commentMarker.length > 0) {
+                const available = Math.min(this.commentMarker.length, bufferLength - index);
+                const matches = buffer
+                    .subarray(index, index + available)
+                    .equals(this.commentMarker.subarray(0, available));
+                if (!isFinal && matches && available < this.commentMarker.length) {
+                    if (available > this.options.maxRowBytes) {
+                        return callback(new Error('Row exceeds the maximum size'));
+                    }
+                    this.state.pendingComment = true;
+                    break;
+                }
+                this.state.comment = matches && available === this.commentMarker.length;
+            }
+
             this.state.rowLength++;
             if (this.state.rowLength > this.options.maxRowBytes) {
                 return callback(new Error('Row exceeds the maximum size'));
             }
 
-            // Resolve a possible doubled quote using the next byte, even across chunks.
-            if (this.state.pendingQuote) {
-                this.state.pendingQuote = false;
-                if (chr === quote && escape === quote) continue;
-                this.state.quoted = false;
-                this.state.afterQuote = this.options.strictQuotes;
-                if (![cr, this.options.separator, this.options.newline].includes(chr)) {
-                    this.state.malformedQuoted = true;
-                }
-            }
-            if (this.state.escaped) {
-                this.state.escaped = false;
-                if (chr === quote) continue;
-            }
-
-            if (this.state.afterQuote) {
-                if (chr === cr && !this.options.customNewline && this.options.newline === nl) {
-                    if (index + 1 === bufferLength) {
-                        this.state.pendingCr = true;
-                        break;
+            if (!this.state.comment) {
+                // Resolve a possible doubled quote using the next byte, even across chunks.
+                if (this.state.pendingQuote) {
+                    this.state.pendingQuote = false;
+                    if (chr === quote && escape === quote) continue;
+                    this.state.quoted = false;
+                    this.state.afterQuote = this.options.strictQuotes;
+                    if (![cr, this.options.separator, this.options.newline].includes(chr)) {
+                        this.state.malformedQuoted = true;
                     }
-                    if (nextChr !== nl && !this.state.first) {
+                }
+                if (this.state.escaped) {
+                    this.state.escaped = false;
+                    if (chr === quote) continue;
+                }
+
+                if (this.state.afterQuote) {
+                    if (chr === cr && !this.options.customNewline && this.options.newline === nl) {
+                        if (index + 1 === bufferLength) {
+                            this.state.pendingCr = true;
+                            break;
+                        }
+                        if (nextChr !== nl && !this.state.first) {
+                            return callback(new Error('Invalid character after closing quote'));
+                        }
+                    } else if (chr !== this.options.separator && chr !== this.options.newline) {
                         return callback(new Error('Invalid character after closing quote'));
                     }
-                } else if (chr !== this.options.separator && chr !== this.options.newline) {
-                    return callback(new Error('Invalid character after closing quote'));
+                    if (chr === this.options.separator) this.state.afterQuote = false;
                 }
-                if (chr === this.options.separator) this.state.afterQuote = false;
-            }
 
-            if (this.state.quoted) {
-                if (chr === quote) {
-                    this.state.pendingQuote = true;
-                } else if (chr === escape) {
-                    this.state.escaped = true;
+                if (this.state.quoted) {
+                    if (chr === quote) {
+                        this.state.pendingQuote = true;
+                    } else if (chr === escape) {
+                        this.state.escaped = true;
+                    }
+                    continue;
                 }
-                continue;
-            }
 
-            // Only field starts introduce quoting; retain inherited transitions after
-            // malformed trailing data in an originally quoted field until row end.
-            if (chr === quote && (this.state.fieldStart || this.state.malformedQuoted)) {
-                this.state.quoted = true;
-                this.state.fieldStart = false;
-                continue;
+                // Only field starts introduce quoting; retain inherited transitions after
+                // malformed trailing data in an originally quoted field until row end.
+                if (chr === quote && (this.state.fieldStart || this.state.malformedQuoted)) {
+                    this.state.quoted = true;
+                    this.state.fieldStart = false;
+                    continue;
+                }
+                this.state.fieldStart = chr === this.options.separator;
             }
-            this.state.fieldStart = chr === this.options.separator;
 
             if (this.state.first && !this.options.customNewline) {
                 if (chr === nl) {
@@ -430,6 +455,7 @@ class CsvParser extends Transform {
             this.state.fieldStart = true;
             this.state.malformedQuoted = false;
             this.state.afterQuote = false;
+            this.state.comment = false;
         }
 
         if (this.state.previousEnd === bufferLength) {
