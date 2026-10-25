@@ -117,6 +117,68 @@ test.serial('validateFile shares BOM preprocessing, counts and callback failures
     });
 });
 
+test.serial(
+    'validateFile shares opt-in blank skipping before headers, skips and mappings',
+    async (t) => {
+        for (const separator of [',', '\t']) {
+            const file = await fixture(
+                `\u{FEFF}\r\n \u{2003}\r\nignored\r\n\r\nA${separator}B\r\n \r\nx${separator}y\r\n \t`,
+            );
+            const values = [];
+            t.deepEqual(
+                await validateFile(file, {
+                    bom: true,
+                    separator,
+                    skipLines: 1,
+                    skipEmptyLines: true,
+                    strict: true,
+                    mapHeaders: ({ header }) => header.toLowerCase(),
+                    mapValues: ({ value }) => {
+                        values.push(value);
+                        return value;
+                    },
+                }),
+                { headers: ['a', 'b'], recordCount: separator === '\t' ? 2 : 1 },
+            );
+            t.deepEqual(values, separator === '\t' ? ['x', 'y', ' ', ''] : ['x', 'y']);
+            const quoted = await fixture(`\n${separator}\n""${separator}" \n "\n`);
+            t.deepEqual(
+                await validateFile(quoted, {
+                    separator,
+                    headers: ['a', 'b'],
+                    skipEmptyLines: true,
+                    strict: true,
+                    raw: true,
+                }),
+                { headers: ['a', 'b'], recordCount: 2 },
+            );
+        }
+        const blank = await fixture('\n \u{A0}\n');
+        t.deepEqual(await validateFile(blank, { skipEmptyLines: true }), {
+            headers: absent,
+            recordCount: 0,
+        });
+        t.deepEqual(await validateFile(blank, { headers: false, skipEmptyLines: true }), {
+            headers: false,
+            recordCount: 0,
+        });
+        t.deepEqual(await validateFile(blank, { headers: ['a'], skipEmptyLines: true }), {
+            headers: ['a'],
+            recordCount: 0,
+        });
+        t.deepEqual(await validateFile(blank, { headers: false }), {
+            headers: false,
+            recordCount: 2,
+        });
+        await t.throwsAsync(validateFile(blank, { headers: ['a'], strict: true }), {
+            message: /Row length/,
+        });
+        await t.throwsAsync(validateFile(blank, { skipEmptyLines: true, maxRowBytes: 2 }), {
+            message: /maximum size/,
+        });
+    },
+);
+
 test.serial('validateFile empty, header-only, explicit and positional modes', async (t) => {
     const empty = await fixture('');
     t.deepEqual(await validateFile(empty), { headers: absent, recordCount: 0 });

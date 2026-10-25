@@ -304,6 +304,32 @@ multiline content remains data. Comments do not invoke mappings or count toward
 `skipLines`; their bytes still count toward `maxRowBytes` and physical output
 byte offsets. With `bom: true`, matching starts after the stripped leading BOM.
 
+#### skipEmptyLines
+
+Type: `Boolean`<br>
+Default: `false`
+
+Set `skipEmptyLines: true` in the parser or `validateFile` options to ignore empty
+and whitespace-only records outside quoted fields. This happens before header
+inference, mappings, strict column-count checks and `skipLines` counting; ignored
+blanks do not consume the skip count. Whitespace follows JavaScript's definition
+except that a BOM (`U+FEFF`) remains data unless removed by `bom: true`. Only one
+leading BOM can be removed; interior and second BOMs remain data.
+
+CSV syntax takes precedence over whitespace: delimiter-only records (including
+TSV tabs), quoted empty or whitespace-only values, and multiline quoted blanks
+remain data. The original record is checked before quoted cells are decoded,
+including with `raw: true`. Physical byte offsets are unchanged, and ignored
+records still count toward `maxRowBytes`. EOF does not create an extra record.
+Omitting the option or setting `false` preserves existing blank-record behavior,
+including strict width errors. This option is currently API-only, not a CLI flag.
+
+```js
+const options = { skipEmptyLines: true, strict: true };
+const summary = await validateFile('data.csv', options);
+const parser = csv(options);
+```
+
 #### skipLines
 
 Type: `Number`<br>
@@ -311,7 +337,8 @@ Default: `0`
 
 Specifies the number of CSV records at the beginning of a data file to discard
 before inferring headers or producing data with explicit headers or `headers: false`.
-Quoted multiline records count once; records ignored by `skipComments` do not count.
+Quoted multiline records count once; records ignored by `skipComments` or
+`skipEmptyLines: true` do not count.
 Discarded records do not invoke `mapValues`. The inferred header record still uses
 `mapHeaders`, not `mapValues`. Record boundaries and `maxRowBytes` are enforced even
 for discarded records, and output byte offsets remain relative to the original input.

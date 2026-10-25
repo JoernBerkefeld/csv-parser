@@ -17,6 +17,7 @@ const defaults = {
     raw: false,
     separator: ',',
     skipComments: false,
+    skipEmptyLines: false,
     // eslint-disable-next-line unicorn/no-null -- Preserve the public default options value.
     skipLines: null,
     maxRowBytes: Number.MAX_SAFE_INTEGER,
@@ -152,6 +153,18 @@ class CsvParser extends Transform {
         }
 
         if (this.state.comment) return;
+
+        // Inspect original bytes before parseCell can unescape quoted values in place.
+        if (this.options.skipEmptyLines) {
+            const record = buffer.subarray(start, end);
+            if (
+                !record.includes(separator) &&
+                !record.includes(quote) &&
+                /^[^\S\u{FEFF}]*$/u.test(record.toString('utf8'))
+            ) {
+                return;
+            }
+        }
 
         const skip = skipLines && skipLines > this.state.lineNumber;
         this.state.lineNumber++;

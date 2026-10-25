@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Default-off `skipEmptyLines: true` for the parser and `validateFile` skips empty
+  and whitespace-only unquoted records before headers, mappings, strict widths
+  and `skipLines` counting. Separators (including TSV tabs), quoted blanks and
+  multiline quoted values remain data. JavaScript whitespace is recognized
+  except unstripped BOMs; only `bom: true` removes one leading BOM. Physical
+  offsets and record-size limits remain unchanged, including at EOF and in raw
+  mode. TypeScript declarations share the option; CLI exposure is separate.
+
 ### Fixed
 
 - Reject colliding actual row keys, including generated overflow names such as

@@ -98,6 +98,14 @@ Bugs Bunny,22
         readonly skipComments?: boolean | string;
 
         /**
+         * Ignore empty and whitespace-only unquoted records before headers, mappings,
+         * strict widths and skipLines counting. Separators, quotes and unstripped BOMs remain data.
+         *
+         * @default false
+         */
+        readonly skipEmptyLines?: boolean;
+
+        /**
          * Specifies the number of lines at the beginning of a data file that the parser should skip over, prior to parsing headers.
          *
          * @default 0

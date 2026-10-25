@@ -63,6 +63,21 @@ expectType<csvParser.CsvParser>(
 expectType<csvParser.CsvParser>(csvParser({ separator: ',' }));
 expectType<csvParser.CsvParser>(csvParser({ skipComments: true }));
 expectType<csvParser.CsvParser>(csvParser({ skipComments: '#' }));
+expectType<csvParser.CsvParser>(csvParser({ skipEmptyLines: true }));
+expectType<csvParser.CsvParser>(csvParser({ skipEmptyLines: false }));
+expectType<boolean | undefined>(options.skipEmptyLines);
+// @ts-expect-error The empty-line option is readonly.
+options.skipEmptyLines = true;
+// @ts-expect-error The empty-line option only accepts booleans.
+csvParser({ skipEmptyLines: 'true' });
+// @ts-expect-error The empty-line option only accepts booleans.
+csvParser({ skipEmptyLines: 1 });
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { skipEmptyLines: true }));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { skipEmptyLines: false }));
+// @ts-expect-error Validation shares the boolean-only empty-line option.
+validateFile('synthetic.csv', { skipEmptyLines: 'true' });
+// @ts-expect-error Validation shares the boolean-only empty-line option.
+validateFile('synthetic.csv', { skipEmptyLines: 1 });
 expectType<csvParser.CsvParser>(csvParser({ skipLines: 1 }));
 expectType<csvParser.CsvParser>(csvParser({ maxRowBytes: 1 }));
 expectType<csvParser.CsvParser>(csvParser({ strict: true }));
