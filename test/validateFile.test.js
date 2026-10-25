@@ -172,6 +172,8 @@ for (const [text, options, message] of [
     ['a\nlong', { maxRowBytes: 3 }, 'maximum size'],
     ['a,a\nx,y', {}, 'Duplicate header'],
     ['x,y', { headers: ['a', 'a'] }, 'Duplicate header'],
+    ['a,b\nlater,row\n', { headers: ['_1'] }, 'Duplicate row key: _1'],
+    ['_1\na,b', {}, 'Duplicate row key: _1'],
 ]) {
     test.serial(`validateFile rejects parser failure: ${message} ${text}`, async (t) => {
         const file = await fixture(text);

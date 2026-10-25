@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- Reject colliding actual row keys, including generated overflow names such as
+  `_1`, instead of overwriting an earlier column. Explicit, inferred and mapped
+  headers share a terminal `Duplicate row key: <key>` stream error, including at
+  EOF. The conflicting row and later records are not emitted; later records are
+  not mapped. Mapping order for the conflicting record, skipped columns,
+  inherited-name headers, explicit `__proto__` own properties, numeric
+  `headers: false` keys and noncolliding overflow values remain unchanged.
 - Strict column-count mismatches now terminate the parser through stream
   completion with one `RangeError`, including at EOF. Later records are neither
   emitted nor mapped in the same or subsequent chunks, including when an error

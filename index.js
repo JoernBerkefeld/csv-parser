@@ -233,7 +233,7 @@ class CsvParser extends Transform {
             return new RangeError('Row length does not match headers');
         }
         const byteOffset = this.bytesRead - buffer.length + start;
-        this.writeRow(cells, byteOffset);
+        return this.writeRow(cells, byteOffset);
     }
 
     parseValue(buffer, start, end) {
@@ -247,17 +247,17 @@ class CsvParser extends Transform {
         for (const [index, cell] of cells.entries()) {
             const header = headers[index];
             if (header === null) continue; // skip columns
-            if (header === undefined) {
-                row[`_${index}`] = cell;
-            } else if (header === '__proto__') {
-                Object.defineProperty(row, header, {
+            const key = header === undefined ? `_${index}` : String(header);
+            if (Object.hasOwn(row, key)) return new Error(`Duplicate row key: ${key}`);
+            if (key === '__proto__') {
+                Object.defineProperty(row, key, {
                     value: cell,
                     writable: true,
                     enumerable: true,
                     configurable: true,
                 });
             } else {
-                row[header] = cell;
+                row[key] = cell;
             }
         }
 

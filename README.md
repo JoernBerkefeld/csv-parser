@@ -338,7 +338,16 @@ Values in the failing row are mapped before its width is checked.
 
 if `false`: the headers are mapped to the column index
 less columns: any missing column in the middle will result in a wrong property mapping!
-more columns: the aditional columns will create a "_"+index properties - eg. "_10":"value"
+more columns: additional columns create `"_" + index` properties, for example
+`"_10": "value"`. If an actual output key collides with another column's key,
+the stream terminates with `Duplicate row key: <key>` instead of overwriting a
+value. For example, headers `['_1']` with input `a,b` fail because both cells
+would use `_1`. The conflicting row is not emitted, and later records are not
+mapped or emitted. This applies to explicit, inferred and mapped headers,
+including final records without a newline. Removed (`null`) columns do not
+reserve keys; `headers: false` keeps its numeric keys. All cells in the
+conflicting record are still passed to `mapValues` before the collision check,
+in the existing order.
 
 #### strictQuotes
 
