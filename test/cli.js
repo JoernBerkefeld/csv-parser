@@ -116,6 +116,68 @@ for (const flag of ['--escape', '-e']) {
     });
 }
 
+for (const flag of ['--skipComments', '-c']) {
+    test(`CLI ${flag} supports filename-first bare flags and stdin`, async (t) => {
+        const filename = fileURLToPath(new URL('fixtures/comment.csv', import.meta.url));
+        const file = await execa(process.execPath, [binPath, filename, flag]);
+        t.deepEqual(JSON.parse(file.stdout), { a: '1', b: '2', c: '3' });
+        const stdin = await execa(process.execPath, [binPath, flag], {
+            input: '# ignored "\na\nx\n',
+        });
+        t.deepEqual(JSON.parse(stdin.stdout), { a: 'x' });
+    });
+
+    test(`CLI ${flag} retains custom markers and consumes ambiguous filenames`, async (t) => {
+        for (const marker of ['//', '-!']) {
+            const result = await execa(process.execPath, [binPath, flag, marker], {
+                input: `${marker} ignored "\na\nx\n`,
+            });
+            t.deepEqual(JSON.parse(result.stdout), { a: 'x' });
+        }
+        const ambiguous = await execa(process.execPath, [binPath, flag, 'input.csv'], {
+            input: 'input.csv ignored\na\nx\n',
+        });
+        t.deepEqual(JSON.parse(ambiguous.stdout), { a: 'x' });
+    });
+}
+
+test('CLI equals comment markers are unambiguous before or after filenames', async (t) => {
+    const filename = fileURLToPath(new URL('fixtures/comment.csv', import.meta.url));
+    for (const arguments_ of [
+        ['--skipComments=#', filename],
+        [filename, '--skipComments=#'],
+        ['--skipComments', '#', filename],
+        [filename, '-c', '#'],
+    ]) {
+        const result = await execa(process.execPath, [binPath, ...arguments_]);
+        t.deepEqual(JSON.parse(result.stdout), { a: '1', b: '2', c: '3' });
+    }
+    const stdin = await execa(process.execPath, [binPath, '--skipComments=//'], {
+        input: '// ignored\na\nx\n',
+    });
+    t.deepEqual(JSON.parse(stdin.stdout), { a: 'x' });
+    const disabled = await execa(process.execPath, [binPath, '--skipComments='], {
+        input: 'a\n#value\n',
+    });
+    t.deepEqual(JSON.parse(disabled.stdout), { a: '#value' });
+});
+
+test('CLI help demonstrates bare/custom comments, stdin and ordering', async (t) => {
+    const result = await execa(process.execPath, [binPath, '--help'], { reject: false });
+    for (const example of [
+        'csv-parser input.csv --skipComments',
+        'csv-parser input.csv -c',
+        "csv-parser --skipComments '//' input.csv",
+        "csv-parser input.csv -c '//'",
+        'csv-parser --skipComments=// input.csv',
+        'cat input.csv | csv-parser --skipComments',
+        "cat input.csv | csv-parser -c '//'",
+        '--skipComments input.csv consumes input.csv',
+    ]) {
+        t.true(result.stderr.includes(example), example);
+    }
+});
+
 test('CLI help advertises skipEmptyLines', async (t) => {
     const result = await execa(process.execPath, [binPath, '--help'], { reject: false });
     t.regex(result.stderr, /--skipEmptyLines\s+Skip empty and whitespace-only unquoted records/);

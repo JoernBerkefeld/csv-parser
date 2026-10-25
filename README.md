@@ -523,12 +523,32 @@ Usage: csv-parser [filename?] [options]
   --quote,-q          Set the quote character ('"' by default)
   --remove            Remove inferred columns by comma-separated header names
   --separator,-s      Set the separator character ("," by default)
-  --skipComments,-c   Skip CSV comments that begin with '#'. Set a value to change the comment character.
+  --skipComments,-c   Skip '#' comments; a following value sets a custom marker
+  --skipComments=...  Set a custom comment marker without consuming a filename
   --skipEmptyLines    Skip empty and whitespace-only unquoted records
   --skipLines,-l      Set the number of lines to skip to before parsing headers
   --strict            Require column length match headers length
   --version,-v        Print out the installed version
 ```
+
+Comment flags preserve space-separated custom markers. A bare flag uses `#`
+only when there is no following value, so put a filename **before** the bare flag:
+
+```sh
+csv-parser input.csv --skipComments        # Bare '#' comments, filename first
+csv-parser input.csv -c                    # Bare short alias, filename first
+csv-parser --skipComments '//' input.csv    # Custom marker before filename
+csv-parser input.csv -c '//'               # Custom marker after filename
+csv-parser --skipComments=// input.csv      # Unambiguous custom marker
+cat input.csv | csv-parser --skipComments   # Bare '#' comments from stdin
+cat input.csv | csv-parser -c '//'          # Custom marker from stdin
+```
+
+**Ordering matters:** `csv-parser --skipComments input.csv` consumes `input.csv`
+as a custom marker and reads stdin; it does not open that file. Use
+`csv-parser input.csv --skipComments` for a bare flag with file input. A custom
+marker may contain multiple characters; `--skipComments=<marker>` also supports
+markers starting with `-` without ambiguity. Other CLI argument syntax is unchanged.
 
 Use `csv-parser input.csv --strict` (or `csv-parser --strict input.csv`) to
 reject rows whose column count differs from the headers. For stdin, use

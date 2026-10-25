@@ -15,6 +15,10 @@
 
 ### Fixed
 
+- CLI `--skipComments` / `-c` accepts bare flags for `#` comments and retains
+  space-separated custom markers. `--skipComments=<marker>` is unambiguous.
+  README and help include filename-first bare flags, custom markers, stdin and
+  the intentional `--skipComments input.csv` custom-marker ambiguity.
 - CLI `--escape` / `-e` now forwards custom escapes, while omitting it preserves
   the selected quote character as the parser's escape default.
 - CLI `--quote` / `-q` now forwards the selected quote character to the parser.
