@@ -141,6 +141,7 @@ const output =
     argv.output && argv.output !== '-' ? fs.createWriteStream(argv.output) : process.stdout;
 const options = {
     separator: argv.separator,
+    quote: argv.quote,
     strict: argv.strict,
     skipComments: argv.skipComments,
     skipEmptyLines: argv.skipEmptyLines,

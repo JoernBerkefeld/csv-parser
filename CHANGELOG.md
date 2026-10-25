@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- CLI `--quote` / `-q` now forwards the selected quote character to the parser.
 - CLI `--remove <names>` now parses the comma-separated list and maps inferred
   headers using the parser's `{ header }` callback contract.
 - CLI `--strict` now enables column-count checking rather than being treated as

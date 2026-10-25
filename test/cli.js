@@ -88,6 +88,21 @@ test('CLI remove maps inferred header names and keeps exact retained values', as
     t.deepEqual(JSON.parse(explicit.stdout), { a: 'first', b: 'second' });
 });
 
+for (const flag of ['--quote', '-q']) {
+    test(`CLI forwards custom quotes through ${flag}`, async (t) => {
+        const result = await execa(process.execPath, [binPath, flag, "'"], {
+            input: "a,b\n'one,two','line\nnext'\n'it''s',plain\n",
+        });
+        t.deepEqual(
+            result.stdout.split('\n').map((row) => JSON.parse(row)),
+            [
+                { a: 'one,two', b: 'line\nnext' },
+                { a: "it's", b: 'plain' },
+            ],
+        );
+    });
+}
+
 test('CLI help advertises skipEmptyLines', async (t) => {
     const result = await execa(process.execPath, [binPath, '--help'], { reject: false });
     t.regex(result.stderr, /--skipEmptyLines\s+Skip empty and whitespace-only unquoted records/);
