@@ -521,7 +521,7 @@ Usage: csv-parser [filename?] [options]
   --help              Show this help
   --output,-o         Set output file. Defaults to stdout
   --quote,-q          Set the quote character ('"' by default)
-  --remove            Remove columns from output by header name
+  --remove            Remove inferred columns by comma-separated header names
   --separator,-s      Set the separator character ("," by default)
   --skipComments,-c   Skip CSV comments that begin with '#'. Set a value to change the comment character.
   --skipEmptyLines    Skip empty and whitespace-only unquoted records
@@ -534,6 +534,11 @@ Use `csv-parser input.csv --strict` (or `csv-parser --strict input.csv`) to
 reject rows whose column count differs from the headers. For stdin, use
 `cat input.csv | csv-parser --strict`. Strict width checking remains off unless
 requested; a mismatch exits with status 1.
+
+Remove inferred columns by passing comma-separated header names, for example
+`csv-parser input.csv --remove private,internal`. Other columns keep their original
+names and values; unknown names are ignored. As with the parser API, explicit
+`--headers` bypasses header mapping, so `--remove` applies only to inferred headers.
 
 For example; to parse a TSV file:
 

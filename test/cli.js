@@ -68,6 +68,26 @@ test('CLI strict flag validates widths without consuming the filename', async (t
     t.deepEqual(JSON.parse(permissive.stdout), { a: 'short' });
 });
 
+test('CLI remove maps inferred header names and keeps exact retained values', async (t) => {
+    for (const separator of [',', '\t']) {
+        const result = await execa(
+            process.execPath,
+            [binPath, '--remove', 'a,c,missing', '-s', separator],
+            {
+                input: `a${separator}b${separator}c\nfirst${separator}Δelta${separator}last\n`,
+            },
+        );
+        t.deepEqual(JSON.parse(result.stdout), { b: 'Δelta' });
+    }
+    const filename = fileURLToPath(new URL('fixtures/basic.csv', import.meta.url));
+    const file = await execa(process.execPath, [binPath, '--remove', 'b', filename]);
+    t.deepEqual(JSON.parse(file.stdout), { a: '1', c: '3' });
+    const explicit = await execa(process.execPath, [binPath, '--headers', 'a,b', '--remove', 'a'], {
+        input: 'first,second\n',
+    });
+    t.deepEqual(JSON.parse(explicit.stdout), { a: 'first', b: 'second' });
+});
+
 test('CLI help advertises skipEmptyLines', async (t) => {
     const result = await execa(process.execPath, [binPath, '--help'], { reject: false });
     t.regex(result.stderr, /--skipEmptyLines\s+Skip empty and whitespace-only unquoted records/);

@@ -16,6 +16,7 @@ function parseArguments() {
     let skipComments;
     let skipEmptyLines;
     let strict;
+    let remove;
     let escape = '"';
     let headers;
     let output;
@@ -33,6 +34,10 @@ function parseArguments() {
             case '--skipComments':
             case '-c': {
                 skipComments = arguments_[++index];
+                continue;
+            }
+            case '--remove': {
+                remove = arguments_[++index];
                 continue;
             }
             case '--strict': {
@@ -92,6 +97,7 @@ function parseArguments() {
         skipComments,
         skipEmptyLines,
         strict,
+        remove,
         escape,
         headers,
         output,
@@ -119,7 +125,7 @@ if (argv.help || (!filename && process.stdin.isTTY)) {
   --help              Show this help
   --output,-o         Set output file. Defaults to stdout
   --quote,-q          Set the quote character ('"' by default)
-  --remove            Remove headers from output
+  --remove            Remove inferred columns by comma-separated header names
   --separator,-s      Set the separator character ("," by default)
   --skipComments,-c   Skip CSV comments that begin with '#'. Set a value to change the comment character.
   --skipEmptyLines    Skip empty and whitespace-only unquoted records
@@ -147,9 +153,9 @@ if (argv.headers) {
 
 if (argv.remove) {
     const removeHeaders = new Set(argv.remove.split(','));
-    options.mapHeaders = (name) => {
+    options.mapHeaders = ({ header }) => {
         // eslint-disable-next-line unicorn/no-null -- Null is the public mapHeaders column-skipping sentinel.
-        return removeHeaders.has(name) ? null : name;
+        return removeHeaders.has(header) ? null : header;
     };
 }
 

@@ -15,6 +15,8 @@
 
 ### Fixed
 
+- CLI `--remove <names>` now parses the comma-separated list and maps inferred
+  headers using the parser's `{ header }` callback contract.
 - CLI `--strict` now enables column-count checking rather than being treated as
   a filename; it works before or after a filename and with stdin.
 - CLI stream failures now terminate with a concise stderr message and status 1.
