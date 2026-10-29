@@ -1,5 +1,24 @@
 import { expectType } from 'tsd';
-import csvParser, { validateFile, type ValidationResult } from './index.js';
+import csvParser, {
+    validateFile,
+    validateFiles,
+    replayFiles,
+    type ValidationResult,
+    type FileSetValidation,
+} from './index.js';
+
+expectType<Promise<FileSetValidation>>(validateFiles(Object.freeze(['part1.csv', 'part2.csv']), {
+    sanitizeBottom: true, sanitizeRightPadding: true, skipEmptyLines: false,
+}));
+expectType<Promise<FileSetValidation>>(validateFile('part.csv', { sanitizeBottom: true }));
+const fileSet = await validateFiles(['part.csv']);
+expectType<AsyncGenerator<any>>(replayFiles(fileSet));
+expectType<number>(fileSet.cleanup.removedRecords);
+expectType<readonly string[]>(fileSet.physicalHeaders);
+// @ts-expect-error Metadata is immutable.
+fileSet.recordCount = 1;
+// @ts-expect-error File sanitizing only accepts booleans.
+validateFiles(['part.csv'], { sanitizeBottom: 'true' });
 
 const options: csvParser.Options = {};
 
@@ -65,6 +84,13 @@ expectType<csvParser.CsvParser>(csvParser({ skipComments: true }));
 expectType<csvParser.CsvParser>(csvParser({ skipComments: '#' }));
 expectType<csvParser.CsvParser>(csvParser({ skipEmptyLines: true }));
 expectType<csvParser.CsvParser>(csvParser({ skipEmptyLines: false }));
+expectType<boolean | undefined>(options.sanitizeRightPadding);
+expectType<csvParser.CsvParser>(csvParser({ sanitizeRightPadding: true }));
+expectType<Promise<ValidationResult>>(validateFile('synthetic.csv', { sanitizeRightPadding: false }));
+// @ts-expect-error The right-padding option only accepts booleans.
+csvParser({ sanitizeRightPadding: 'true' });
+// @ts-expect-error The right-padding option is readonly.
+options.sanitizeRightPadding = true;
 expectType<boolean | undefined>(options.skipEmptyLines);
 // @ts-expect-error The empty-line option is readonly.
 options.skipEmptyLines = true;

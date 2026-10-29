@@ -40,6 +40,13 @@ requirement are unchanged.
 Version 4.1.0 adds `validateFile` and opt-in `strictQuotes`, while preserving
 the default factory API and permissive quote handling unless explicitly enabled.
 
+Version 5.0.0 enables empty-record skipping by default, including delimiter-only
+and quoted-empty records. Set `skipEmptyLines: false` or use the CLI flag
+`--no-skip-empty-lines` to preserve them. Opt-in right-padding sanitizing and
+file-set validation/replay with optional bottom trimming are described below;
+ordinary streams do not trim trailing records. Native ESM and the Node.js
+requirement remain unchanged.
+
 ## Benchmarks
 
 From a repository checkout, `node bin/bench <filename>` streams the file through
@@ -324,29 +331,60 @@ byte offsets. With `bom: true`, matching starts after the stripped leading BOM.
 #### skipEmptyLines
 
 Type: `Boolean`<br>
-Default: `false`
+Default: `true`
 
-Set `skipEmptyLines: true` in the parser or `validateFile` options to ignore empty
-and whitespace-only records outside quoted fields. This happens before header
-inference, mappings, strict column-count checks and `skipLines` counting; ignored
-blanks do not consume the skip count. Whitespace follows JavaScript's definition
-except that a BOM (`U+FEFF`) remains data unless removed by `bom: true`. Only one
-leading BOM can be removed; interior and second BOMs remain data.
+The parser and `validateFile` skip unquoted blank/whitespace-only records and
+records whose parsed cells are all exactly empty, including delimiter-only and
+quoted-empty records. Omitted or `undefined` options enable skipping; explicit
+`skipEmptyLines: false` preserves empty records. Only booleans are accepted.
+This is a breaking default change: migrate preservation-sensitive callers to
+`csv({ skipEmptyLines: false })` or `csv-parser input.csv --no-skip-empty-lines`.
+The existing `--skipEmptyLines` flag remains supported (`--skip-empty-lines` is
+also accepted); the CLI defaults to skipping.
 
-CSV syntax takes precedence over whitespace: delimiter-only records (including
-TSV tabs), quoted empty or whitespace-only values, and multiline quoted blanks
-remain data. The original record is checked before quoted cells are decoded,
-including with `raw: true`. Physical byte offsets are unchanged, and ignored
-records still count toward `maxRowBytes`. EOF does not create an extra record.
-Omitting the option or setting `false` preserves existing blank-record behavior,
-including strict width errors. The CLI exposes the same opt-in behavior through
-`--skipEmptyLines`, for example `csv-parser input.csv --skipEmptyLines`.
+Quoted whitespace, multiline whitespace and whitespace-valued cells remain data.
+Classification uses original parsed cells before value mappings, so mappings
+cannot hide populated records. Ignored records do not invoke mappings or consume
+`skipLines`. Strict widths still apply to delimiter-only and quoted-empty records;
+only unquoted blank/whitespace lines retain the strict-width exception when
+skipping is enabled. Whitespace follows JavaScript's definition except an
+unstripped BOM (`U+FEFF`) remains data. Only `bom: true` removes one leading BOM.
+Physical offsets and `maxRowBytes` enforcement are unchanged, including raw mode
+and EOF. Empty-only inferred inputs produce no fabricated header schema.
 
 ```js
 const options = { skipEmptyLines: true, strict: true };
 const summary = await validateFile('data.csv', options);
 const parser = csv(options);
 ```
+
+#### sanitizeRightPadding
+
+Type: `Boolean`<br>
+Default: `false`
+
+Opt in with `csv({ sanitizeRightPadding: true })` (or the same `validateFile`
+option) to remove only the contiguous suffix of exactly empty source header
+names. Interior unnamed columns and named columns whose values happen to be
+empty remain. A `mapHeaders` callback that deliberately names a source-empty
+column retains it; mapping a named source header to `null` or `''` never makes
+it padding. Explicit header arrays use the same suffix rule without running
+`mapHeaders`. Positional `headers: false` has no header padding to remove.
+Duplicate retained headers still fail.
+
+All discarded cells must be exactly empty **before** `mapValues` runs. Any data,
+including whitespace, terminates parsing with record, column and byte-offset
+context (`validateFile` additionally includes the path). Callback indexes and
+header arguments remain physical, including empty discarded cells; raw values
+and offsets are preserved. `strict: true` validates the original physical width,
+not the projected output width. This option accepts only booleans.
+
+Ordinary streams remain incremental and may emit earlier rows before a later
+padding error. Complete file validation is needed before destructive work.
+This option does not trim bottom records, buffer/replay a whole stream, or alter
+source files; file-set bottom-edge cleanup is not provided by this stream option.
+For example, `a,b,,` with `x,y,,` emits `{ a: 'x', b: 'y' }`, while `x,y,, `
+fails rather than silently discarding the final space.
 
 #### skipLines
 
@@ -495,6 +533,73 @@ For multiple files or targets, validate **all** selected inputs before the first
 CLEAR or upload anywhere in the job. The example assumes the source remains
 unchanged between passes; failures after CLEAR can still leave partial effects.
 
+### `validateFiles(paths, options)` and `replayFiles(validation)`
+
+For an ordered set of CSV/TSV parts, validate the entire logical input before
+replaying it. The first discovered header record defines the physical schema;
+later files contain data only. Every file has its own BOM and quote/EOF handling.
+Files are never byte-concatenated. Empty parts before header discovery do not
+create a schema.
+
+```js
+import { validateFiles, replayFiles } from '@joern.berkefeld/csv-parser';
+
+const validation = await validateFiles(['part1.csv', 'part2.csv'], {
+    bom: true,
+    strict: true,
+    strictQuotes: true,
+    sanitizeRightPadding: true,
+    sanitizeBottom: true,
+    skipEmptyLines: false,
+});
+if (validation.recordCount === 0) throw new Error('No data records to import');
+for await (const row of replayFiles(validation)) {
+    await uploadRow(row);
+}
+```
+
+`sanitizeBottom` defaults to false and is **file-only**. When true, it removes
+only the final contiguous empty-record suffix across the whole set, including
+suffixes spanning empty parts. Header discovery occurs first. An unquoted blank
+or whitespace-only record is empty; otherwise all parsed cells must be exactly
+empty. Quoted whitespace remains data. Strict delimiter/quoted-empty width
+errors and malformed quoting (with `strictQuotes: true`) remain fatal, even at
+EOF. With skipping disabled, strict width errors for unquoted blank records are
+deferred using a single pending error: trailing blanks are removed, but a later
+data record makes the error fatal. Ordinary parser streams do not defer these
+errors or buffer bottom records.
+
+The frozen result contains `files`, projected `headers`, original
+`physicalHeaders`, `mappedPhysicalHeaders` (including removed-column sentinels),
+`retainedWidth` (physical prefix width, not number of row properties),
+`recordCount` (rows replay will emit), and `finalRecord` (zero-based `fileIndex`
+and one-based physical CSV `recordNumber`, or undefined for no retained data).
+Physical records include headers/comments/skips; multiline fields count as one
+record. `headers: false` keeps positional output and has empty schema arrays.
+An undiscovered schema has `headers: null`.
+
+Frozen `cleanup` contains `removedColumns` (right-padding columns once per
+logical schema), `removedRecords` (bottom-only trimming), and `skippedRecords`
+(optional empty-record skips, counted separately and never as bottom cleanup).
+Report cleanup once, only after successful preflight. No-data results remain
+the caller's responsibility to reject before side effects.
+
+Replay accepts the exact result object, not a serialized clone, and yields the
+usual parser row shape, preserving mappings, raw buffers and physical-file byte
+offsets. Inputs, options and deterministic callback behavior must remain
+unchanged between passes: there is no snapshot or file-identity guarantee.
+Mappings run during preflight and again for retained replay rows; trailing
+removed records are not mapped during replay. Bounded counters and one boundary
+replace pending row arrays; memory depends on current record and stream buffers,
+not the length of an empty suffix. Breaking out of replay closes its owned
+streams. Use `maxRowBytes` to bound individual records.
+
+`validateFile(path, { ...options, sanitizeBottom: true })` is a convenience form
+returning the same replayable metadata for one file. With bottom sanitizing
+omitted or false, `validateFile` keeps its existing mutable
+`{ headers, recordCount }` result. Ordinary streams ignore file-only options;
+use the file helpers for bottom trimming.
+
 ## Events
 
 The following events are emitted during parsing:
@@ -542,7 +647,8 @@ Usage: csv-parser [filename?] [options]
   --separator,-s      Set the separator character ("," by default)
   --skipComments,-c   Skip '#' comments; a following value sets a custom marker
   --skipComments=...  Set a custom comment marker without consuming a filename
-  --skipEmptyLines    Skip empty and whitespace-only unquoted records
+  --skipEmptyLines    Skip empty records (enabled by default)
+  --no-skip-empty-lines  Preserve empty records; strict widths still apply
   --skipLines,-l      Set the number of lines to skip to before parsing headers
   --strict            Require column length match headers length
   --version,-v        Print out the installed version

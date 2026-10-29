@@ -78,7 +78,6 @@ for (const separator of [',', '\t']) {
                     raw,
                 });
                 t.deepEqual(result.rows, [
-                    { a: value(''), b: value('') },
                     { a: value(''), b: value(' \t') },
                     { a: value('\n \n'), b: value('a"b') },
                 ]);
@@ -87,9 +86,35 @@ for (const separator of [',', '\t']) {
     });
 }
 
-test('default and explicit false preserve blank records and strict failures', async (t) => {
+for (const separator of [',', '\t']) {
+    for (const preamble of ['""', separator.repeat(2)]) {
+        for (const skipEmptyLines of [undefined, true, false]) {
+            test(`strict explicit-header preamble precedes empty width: ${JSON.stringify([separator, preamble, skipEmptyLines])}`, async (t) => {
+                const options = {
+                    separator,
+                    headers: ['a', 'b'],
+                    strict: true,
+                    ...(skipEmptyLines !== undefined && { skipEmptyLines }),
+                };
+                const text = `${preamble}\np${separator}q\nx${separator}y\n`;
+                for (const chunks of layouts(text)) {
+                    const result = await parse(chunks, { ...options, skipLines: 1 });
+                    t.deepEqual(result.rows, [
+                        ...(skipEmptyLines === false ? [{ a: 'p', b: 'q' }] : []),
+                        { a: 'x', b: 'y' },
+                    ]);
+                    await t.throwsAsync(parse(chunks, options), {
+                        message: 'Row length does not match headers',
+                    });
+                }
+            });
+        }
+    }
+}
+
+test('explicit false preserves blank records and strict failures', async (t) => {
     for (const chunks of layouts('a\n\n \n')) {
-        for (const options of [{}, { skipEmptyLines: false }]) {
+        for (const options of [{ skipEmptyLines: false }]) {
             t.deepEqual(await parse(chunks, options), {
                 headers: ['a'],
                 rows: [{}, { a: ' ' }],
@@ -171,7 +196,7 @@ test('all JavaScript whitespace except BOM is ignored, without inventing EOF row
             newline: '|',
             quote: "'",
         });
-        t.deepEqual(result.rows, [{ a: '' }, { a: ' \t' }, { a: '\n ' }]);
+        t.deepEqual(result.rows, [{ a: ' \t' }, { a: '\n ' }]);
     }
 });
 

@@ -70,9 +70,14 @@ test('incomplete marker at EOF is ordinary CSV, including quote validation', asy
     for (const text of ['/', '💬', '"']) {
         const marker = text === '/' ? '//' : text === '💬' ? '💬!' : '"!';
         for (const chunks of layouts(text)) {
-            t.deepEqual(await parse(chunks, { headers: ['h'], skipComments: marker }), [
-                { h: text === '"' ? '' : text },
-            ]);
+            t.deepEqual(
+                await parse(chunks, {
+                    headers: ['h'],
+                    skipComments: marker,
+                    skipEmptyLines: false,
+                }),
+                [{ h: text === '"' ? '' : text }],
+            );
             if (text === '"') {
                 await t.throwsAsync(
                     parse(chunks, { headers: ['h'], skipComments: marker, strictQuotes: true }),

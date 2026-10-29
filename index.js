@@ -17,7 +17,8 @@ const defaults = {
     raw: false,
     separator: ',',
     skipComments: false,
-    skipEmptyLines: false,
+    skipEmptyLines: true,
+    sanitizeRightPadding: false,
     // eslint-disable-next-line unicorn/no-null -- Preserve the public default options value.
     skipLines: null,
     maxRowBytes: Number.MAX_SAFE_INTEGER,
@@ -27,6 +28,8 @@ const defaults = {
 };
 
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const fileContext = Symbol('fileContext');
+const validatedSets = new WeakMap();
 
 /**
  * Reject unsafe or non-string mapped headers.
@@ -61,7 +64,18 @@ class CsvParser extends Transform {
 
         const options = Object.assign({}, defaults, options_);
 
+        for (const key of ['skipEmptyLines', 'sanitizeRightPadding']) {
+            if (options[key] === undefined) options[key] = defaults[key];
+            if (typeof options[key] !== 'boolean') throw new TypeError(`${key} must be a boolean`);
+        }
+
+        this.options = options;
+        this.physicalHeaders = Array.isArray(options.headers) ? [...options.headers] : undefined;
+        this.retainedWidth = undefined;
+        this.recordNumber = 0;
         if (Array.isArray(options.headers)) {
+            this.retainedWidth = this.paddingWidth(options.headers, options.headers);
+            options.headers = options.headers.slice(0, this.retainedWidth);
             const error = duplicateHeaderError(options.headers);
             if (error) throw error;
         }
@@ -111,11 +125,31 @@ class CsvParser extends Transform {
 
         this.options = options;
         this.headers = options.headers;
+        this.mappedPhysicalHeaders = this.physicalHeaders;
         this.commentMarker = options.skipComments
             ? Buffer.from(typeof options.skipComments === 'string' ? options.skipComments : '#')
             : Buffer.alloc(0);
         this.bytesRead = 0;
         this.bomPending = options.bom ? Buffer.alloc(0) : undefined;
+    }
+
+    /**
+     * Locate only source-empty trailing headers not deliberately named by mapping.
+     * @param {Array} source - Original physical header names.
+     * @param {Array} mapped - Effective header names.
+     * @returns {number} Retained physical prefix width.
+     */
+    paddingWidth(source, mapped) {
+        let width = source.length;
+        if (this.options.sanitizeRightPadding) {
+            while (
+                width > 0 &&
+                source[width - 1] === '' &&
+                (mapped[width - 1] === '' || mapped[width - 1] === null)
+            )
+                width--;
+        }
+        return width;
     }
 
     parseCell(buffer, start, end) {
@@ -155,39 +189,25 @@ class CsvParser extends Transform {
             end--;
         }
 
+        this.recordNumber++;
         if (this.state.comment) return;
 
         // Inspect original bytes before parseCell can unescape quoted values in place.
-        if (this.options.skipEmptyLines) {
-            const record = buffer.subarray(start, end);
-            if (
-                !record.includes(separator) &&
-                !record.includes(quote) &&
-                /^[^\S\u{FEFF}]*$/u.test(record.toString('utf8'))
-            ) {
-                return;
-            }
+        const context = this[fileContext];
+        const record = buffer.subarray(start, end);
+        const isBlank =
+            !record.includes(separator) &&
+            !record.includes(quote) &&
+            /^[^\S\u{FEFF}]*$/u.test(record.toString('utf8'));
+        if (isBlank && (this.options.skipEmptyLines || (context?.bottom && this.state.first))) {
+            if (context) context.skipped++;
+            return;
         }
-
-        const skip = skipLines && skipLines > this.state.lineNumber;
-        this.state.lineNumber++;
-        if (skip) return;
 
         const comma = separator;
         const cells = [];
         let isQuoted = false;
         let offset = start;
-
-        const mapValue = (value) => {
-            if (this.state.first) {
-                return value;
-            }
-
-            const index = cells.length;
-            const header = this.headers[index];
-
-            return mapValues({ header, index, value });
-        };
 
         for (let index = start; index < end; index++) {
             const isStartingQuote = !isQuoted && index === offset && buffer[index] === quote;
@@ -211,21 +231,37 @@ class CsvParser extends Transform {
             }
 
             if (isQuoted || buffer[index] !== comma) continue;
-            let value = this.parseCell(buffer, offset, index);
-            value = mapValue(value);
-            cells.push(value);
+            cells.push(this.parseCell(buffer, offset, index));
             offset = index + 1;
         }
 
         if (offset < end) {
-            let value = this.parseCell(buffer, offset, end);
-            value = mapValue(value);
-            cells.push(value);
+            cells.push(this.parseCell(buffer, offset, end));
         }
 
         if (buffer[end - 1] === comma) {
-            cells.push(mapValue(this.state.empty));
+            cells.push(this.state.empty);
         }
+
+        const isEmpty = isBlank || cells.every((cell) => cell.length === 0);
+        const skip = skipLines && skipLines > this.state.lineNumber;
+        // Ignored empties do not consume skipLines; pending preambles bypass data widths.
+        if (
+            (this.options.skipEmptyLines || (context?.bottom && this.state.first)) &&
+            cells.every((cell) => cell.length === 0)
+        ) {
+            if (
+                !skip &&
+                !this.state.first &&
+                this.options.strict &&
+                cells.length !== this.physicalHeaders.length
+            )
+                return new RangeError('Row length does not match headers');
+            if (context) context.skipped++;
+            return;
+        }
+        this.state.lineNumber++;
+        if (skip) return;
 
         if (this.state.first) {
             this.state.first = false;
@@ -238,6 +274,12 @@ class CsvParser extends Transform {
                 return sanitizeHeader(mapped);
             });
 
+            this.physicalHeaders = cells.map((cell) =>
+                this.options.raw ? cell.toString('utf8') : cell,
+            );
+            this.mappedPhysicalHeaders = this.headers;
+            this.retainedWidth = this.paddingWidth(this.physicalHeaders, this.headers);
+            this.headers = this.headers.slice(0, this.retainedWidth);
             const error = duplicateHeaderError(this.headers);
             if (error) return error;
 
@@ -245,9 +287,62 @@ class CsvParser extends Transform {
             return;
         }
 
-        return this.options.strict && cells.length !== this.headers.length
-            ? new RangeError('Row length does not match headers')
-            : this.writeRow(cells, byteOffset);
+        if (context) {
+            if (!isEmpty && context.pendingError) return context.pendingError;
+            if (
+                isBlank &&
+                context.bottom &&
+                this.options.strict &&
+                cells.length !== this.physicalHeaders?.length
+            ) {
+                context.pendingError ||= new RangeError(
+                    `Row length does not match headers at ${context.path}, record ${this.recordNumber}`,
+                );
+                context.trailing++;
+                return;
+            }
+            if (isEmpty && context.bottom) context.trailing++;
+            else {
+                context.count += context.trailing + 1;
+                context.trailing = 0;
+                context.boundary = {
+                    fileIndex: context.fileIndex,
+                    recordNumber: this.recordNumber,
+                };
+            }
+            if (context.replayBoundary) {
+                const boundary = context.replayBoundary;
+                if (
+                    context.fileIndex > boundary.fileIndex ||
+                    (context.fileIndex === boundary.fileIndex &&
+                        this.recordNumber > boundary.recordNumber)
+                )
+                    return;
+            } else if (context.replay) return;
+        }
+
+        // Validate unmapped evidence before any callback can erase populated padding.
+        if (this.retainedWidth < this.physicalHeaders?.length) {
+            for (let index = this.retainedWidth; index < cells.length; index++) {
+                if (cells[index].length > 0) {
+                    return new Error(
+                        `Nonempty right-padding cell at record ${this.recordNumber}, column ${index + 1}, byte offset ${byteOffset}`,
+                    );
+                }
+            }
+        }
+        const mapped = cells.map((value, index) =>
+            mapValues({ header: this.mappedPhysicalHeaders?.[index], index, value }),
+        );
+        if (this.options.strict && cells.length !== this.physicalHeaders.length) {
+            return new RangeError('Row length does not match headers');
+        }
+        return this.writeRow(
+            this.retainedWidth < this.physicalHeaders?.length
+                ? mapped.slice(0, this.retainedWidth)
+                : mapped,
+            byteOffset,
+        );
     }
 
     parseValue(buffer, start, end) {
@@ -597,12 +692,178 @@ export default function csvParser(options) {
 }
 
 /**
+ * Capture mapper failures in stream callbacks, including EOF.
+ * @param {CsvParser} parser - Owned parser.
+ * @returns {CsvParser} Guarded parser.
+ */
+function guardParser(parser) {
+    for (const method of ['_transform', '_flush']) {
+        const original = parser[method];
+        parser[method] = (...arguments_) => {
+            try {
+                original.apply(parser, arguments_);
+            } catch (error) {
+                arguments_.at(-1)(
+                    error instanceof Error ? error : new Error(String(error), { cause: error }),
+                );
+            }
+        };
+    }
+    return parser;
+}
+
+/**
+ * Build a parser using the original physical schema for continuation files.
+ * @param {object} options - Parser settings.
+ * @param {object|undefined} schema - First discovered schema.
+ * @param {object} context - Bounded file-set counters.
+ * @returns {CsvParser} Independent physical-file parser.
+ */
+function fileParser(options, schema, context) {
+    const parser = guardParser(
+        csvParser(schema ? { ...options, headers: schema.headers, skipLines: 0 } : options),
+    );
+    if (schema) parser.options.newline = schema.newline;
+    if (schema && schema.headers !== false) {
+        parser.physicalHeaders = schema.physicalHeaders;
+        parser.mappedPhysicalHeaders = schema.mappedPhysicalHeaders;
+        parser.retainedWidth = schema.retainedWidth;
+        parser.headers = schema.headers;
+    }
+    parser[fileContext] = context;
+    return parser;
+}
+
+/**
+ * Validate ordered physical files without concatenating bytes or retaining rows.
+ * @param {string[]} filePaths - Ordered paths; only the first discovered schema is consumed.
+ * @param {object|ReadonlyArray<string>} [optionsOrHeaders] - Parser options plus sanitizeBottom.
+ * @returns {Promise<object>} Frozen preflight metadata accepted by replayFiles.
+ */
+export async function validateFiles(filePaths, optionsOrHeaders) {
+    if (
+        !Array.isArray(filePaths) ||
+        filePaths.length === 0 ||
+        filePaths.some((file) => typeof file !== 'string')
+    )
+        throw new TypeError('filePaths must be a nonempty array of strings');
+    const paths = Object.freeze([...filePaths]);
+    const options = Array.isArray(optionsOrHeaders)
+        ? { headers: [...optionsOrHeaders] }
+        : { ...optionsOrHeaders };
+    if (Array.isArray(options.headers)) options.headers = Object.freeze([...options.headers]);
+    if (options.sanitizeBottom !== undefined && typeof options.sanitizeBottom !== 'boolean')
+        throw new TypeError('sanitizeBottom must be a boolean');
+    const context = { bottom: options.sanitizeBottom === true, trailing: 0, count: 0, skipped: 0 };
+    let schema;
+    let schemaFileIndex;
+    for (const [fileIndex, filePath] of paths.entries()) {
+        context.fileIndex = fileIndex;
+        context.path = filePath;
+        const parser = fileParser(options, schema, context);
+        const sink = new Writable({
+            objectMode: true,
+            write(row, encoding, callback) {
+                callback();
+            },
+        });
+        try {
+            await pipeline(createReadStream(filePath), parser, sink);
+        } catch (error) {
+            const failure = new Error(
+                `Unable to validate ${filePath} at record ${parser.recordNumber}: ${error.message}`,
+                { cause: error },
+            );
+            if (error.code !== undefined) failure.code = error.code;
+            throw failure;
+        }
+        if (schema || !(Array.isArray(parser.headers) || parser.headers === false)) {
+            continue;
+        }
+
+        schemaFileIndex = fileIndex;
+        schema = Object.freeze({
+            headers: Array.isArray(parser.headers) ? Object.freeze([...parser.headers]) : false,
+            physicalHeaders: Object.freeze([...(parser.physicalHeaders || [])]),
+            mappedPhysicalHeaders: Object.freeze([...(parser.mappedPhysicalHeaders || [])]),
+            retainedWidth: parser.retainedWidth ?? 0,
+            newline: parser.options.newline,
+        });
+    }
+    const result = Object.freeze({
+        files: paths,
+        // eslint-disable-next-line unicorn/no-null -- Match the existing undiscovered-header sentinel.
+        headers: schema?.headers ?? null,
+        physicalHeaders: schema?.physicalHeaders ?? Object.freeze([]),
+        mappedPhysicalHeaders: schema?.mappedPhysicalHeaders ?? Object.freeze([]),
+        retainedWidth: schema?.retainedWidth ?? 0,
+        recordCount: context.count,
+        finalRecord: context.boundary ? Object.freeze(context.boundary) : undefined,
+        cleanup: Object.freeze({
+            removedColumns: schema ? schema.physicalHeaders.length - schema.retainedWidth : 0,
+            removedRecords: context.trailing,
+            skippedRecords: context.skipped,
+        }),
+    });
+    validatedSets.set(result, { options: Object.freeze(options), schema, schemaFileIndex });
+    return result;
+}
+
+/**
+ * Replay a successful preflight with bounded backpressure. Inputs must remain unchanged.
+ * @param {object} validation - Exact metadata object returned by validateFiles.
+ * @yields {object} Parser rows, including raw values/byte offsets when requested.
+ * @returns {AsyncGenerator<object>} Retained rows in file order.
+ */
+export async function* replayFiles(validation) {
+    const saved = validatedSets.get(validation);
+    if (!saved) throw new TypeError('validation must be a result from validateFiles');
+    for (const [fileIndex, filePath] of validation.files.entries()) {
+        const context = {
+            bottom: saved.options.sanitizeBottom === true,
+            count: 0,
+            trailing: 0,
+            skipped: 0,
+            fileIndex,
+            path: filePath,
+            replay: true,
+            replayBoundary: validation.finalRecord,
+        };
+        // Rediscover headers only through the original schema-bearing part.
+        const parser = fileParser(
+            saved.options,
+            fileIndex > saved.schemaFileIndex ? saved.schema : undefined,
+            context,
+        );
+        const source = createReadStream(filePath);
+        const completion = pipeline(source, parser);
+        // Attach immediately so an early source failure cannot become an unhandled rejection.
+        // eslint-disable-next-line unicorn/prefer-await -- Observe concurrently while the iterator drains the pipeline.
+        completion.catch(() => {});
+        try {
+            for await (const row of parser) yield row;
+            await completion;
+        } finally {
+            source.destroy();
+            parser.destroy();
+            try {
+                await completion;
+            } catch {
+                // Iteration reports failures; early cancellation intentionally destroys the pipeline.
+            }
+        }
+    }
+}
+
+/**
  * Stream a whole file through the parser without retaining its data rows.
  * @param {unknown} filePath - Filesystem path to validate; must be a string.
  * @param {object|ReadonlyArray<string>} [optionsOrHeaders] - Factory-compatible parser settings.
  * @returns {Promise<{headers: (string|null)[]|false|null, recordCount: number}>} Effective headers and data count.
  */
 export async function validateFile(filePath, optionsOrHeaders) {
+    if (optionsOrHeaders?.sanitizeBottom === true)
+        return validateFiles([filePath], optionsOrHeaders);
     const streams = [];
     try {
         if (typeof filePath !== 'string') throw new TypeError('filePath must be a string');

@@ -98,12 +98,23 @@ Bugs Bunny,22
         readonly skipComments?: boolean | string;
 
         /**
-         * Ignore empty and whitespace-only unquoted records before headers, mappings,
-         * strict widths and skipLines counting. Separators, quotes and unstripped BOMs remain data.
+         * Ignore unquoted blank/whitespace records and records with all cells exactly empty.
+         * Quoted whitespace remains data; delimiter/quoted-empty records still obey strict widths.
+         * Empty records do not invoke mappings or consume skipLines. Explicit false opts out.
+         *
+         * @default true
+         */
+        readonly skipEmptyLines?: boolean;
+
+        /**
+         * Remove only a contiguous suffix of exactly empty source header names unless
+         * mapHeaders names them. Reject nonempty discarded cells before mapValues;
+         * strict widths still use the original physical schema. No effect with headers: false.
+         * Does not trim bottom records or buffer the whole stream.
          *
          * @default false
          */
-        readonly skipEmptyLines?: boolean;
+        readonly sanitizeRightPadding?: boolean;
 
         /**
          * Specifies the number of lines at the beginning of a data file that the parser should skip over, prior to parsing headers.
@@ -179,10 +190,49 @@ export interface ValidationResult {
     recordCount: number;
 }
 
+/** Opt-in single-file bottom sanitizing returns replayable file-set metadata. */
+export declare function validateFile(
+    filePath: string,
+    optionsOrHeaders: FileSetOptions & { readonly sanitizeBottom: true },
+): Promise<FileSetValidation>;
+
 /** Stream the whole file with the same options as the default parser, without retaining rows. */
 export declare function validateFile(
     filePath: string,
-    optionsOrHeaders?: csvParser.Options | ReadonlyArray<string>,
+    optionsOrHeaders?: (csvParser.Options & { readonly sanitizeBottom?: false }) | ReadonlyArray<string>,
 ): Promise<ValidationResult>;
+export declare function validateFile(
+    filePath: string,
+    optionsOrHeaders: FileSetOptions,
+): Promise<ValidationResult | FileSetValidation>;
+
+export interface FileSetOptions extends csvParser.Options {
+    /** Trim the final empty-record suffix across the entire ordered set. Default false. */
+    readonly sanitizeBottom?: boolean;
+}
+
+export interface FileSetValidation {
+    readonly files: readonly string[];
+    readonly headers: readonly (string | null)[] | false | null;
+    readonly physicalHeaders: readonly string[];
+    readonly mappedPhysicalHeaders: readonly (string | null)[];
+    readonly retainedWidth: number;
+    readonly recordCount: number;
+    readonly finalRecord: Readonly<{ fileIndex: number; recordNumber: number }> | undefined;
+    readonly cleanup: Readonly<{
+        removedColumns: number;
+        removedRecords: number;
+        skippedRecords: number;
+    }>;
+}
+
+/** Validate each physical file independently; continuation parts use the original schema. */
+export declare function validateFiles(
+    filePaths: readonly string[],
+    optionsOrHeaders?: FileSetOptions | ReadonlyArray<string>,
+): Promise<FileSetValidation>;
+
+/** Replay an exact preflight result. Files and mapping behavior must remain unchanged. */
+export declare function replayFiles(validation: FileSetValidation): AsyncGenerator<any>;
 
 export default csvParser;

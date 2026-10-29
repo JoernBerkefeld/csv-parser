@@ -75,6 +75,28 @@ for (const separator of [',', '\t']) {
     );
 }
 
+test.serial('validateFile shares default empty skipping and safe right projection', async (t) => {
+    const file = await fixture('a,,\nx,,\n,,\n"","",""\n');
+    for (const skipEmptyLines of [undefined, true, false]) {
+        t.deepEqual(
+            await validateFile(file, { sanitizeRightPadding: true, strict: true, skipEmptyLines }),
+            {
+                headers: ['a'],
+                recordCount: skipEmptyLines === false ? 3 : 1,
+            },
+        );
+    }
+    const invalid = await fixture('a,\nx,\ny, ');
+    await t.throwsAsync(
+        validateFile(invalid, { sanitizeRightPadding: true, mapValues: () => '' }),
+        {
+            message: new RegExp(
+                `Unable to validate .*Nonempty right-padding cell at record 3, column 2`,
+            ),
+        },
+    );
+});
+
 test.serial('validateFile shares BOM preprocessing, counts and callback failures', async (t) => {
     for (const separator of [',', '\t']) {
         const text = `\u{FEFF}"a${separator}b"${separator}c\n"x\ny"${separator}z`;
@@ -150,7 +172,7 @@ test.serial(
                     strict: true,
                     raw: true,
                 }),
-                { headers: ['a', 'b'], recordCount: 2 },
+                { headers: ['a', 'b'], recordCount: 1 },
             );
         }
         const blank = await fixture('\n \u{A0}\n');
@@ -166,13 +188,16 @@ test.serial(
             headers: ['a'],
             recordCount: 0,
         });
-        t.deepEqual(await validateFile(blank, { headers: false }), {
+        t.deepEqual(await validateFile(blank, { headers: false, skipEmptyLines: false }), {
             headers: false,
             recordCount: 2,
         });
-        await t.throwsAsync(validateFile(blank, { headers: ['a'], strict: true }), {
-            message: /Row length/,
-        });
+        await t.throwsAsync(
+            validateFile(blank, { headers: ['a'], strict: true, skipEmptyLines: false }),
+            {
+                message: /Row length/,
+            },
+        );
         await t.throwsAsync(validateFile(blank, { skipEmptyLines: true, maxRowBytes: 2 }), {
             message: /maximum size/,
         });

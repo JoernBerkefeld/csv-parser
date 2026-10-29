@@ -1,5 +1,33 @@
 # Changelog
 
+## [5.0.0] — 2026-10-29
+
+### Breaking Changes
+
+- Empty-record skipping is now enabled by default in the parser, `validateFile`
+  and CLI, including delimiter-only and quoted-empty records. Quoted whitespace
+  remains data. Use `skipEmptyLines: false` or CLI `--no-skip-empty-lines` to
+  preserve empty records. Strict physical widths still apply to delimiter-only
+  and quoted-empty records; unquoted blank skipping retains its width exception.
+  Nonboolean empty-skipping options are rejected.
+
+### Added
+
+- Opt-in, typed `sanitizeRightPadding` removes only a suffix of exactly empty
+  source headers, retaining deliberately mapped names and interior unnamed
+  columns. Nonempty discarded cells (including whitespace) fail before value
+  mappings, with record/column/offset context. Strictness uses the original
+  physical schema. Ordinary streams do not trim bottom records and can emit
+  earlier rows before a late failure; validate files before destructive work.
+
+- `validateFiles` and `replayFiles` provide bounded-memory ordered multipart
+  preflight and replay with immutable physical/projected schemas, retained counts,
+  final file/record boundaries and separate cleanup/skip counts. Opt-in
+  `sanitizeBottom` trims only the logical set's trailing empty records, preserving
+  fatal interior blank-width errors and strict delimiter/quoted-empty errors.
+  Every part is parsed independently; sources must remain unchanged between passes.
+  `validateFile` retains its prior result unless bottom sanitizing is enabled.
+
 ## [4.3.0] — 2026-10-25
 
 ### Added

@@ -59,7 +59,6 @@ for (const separator of [',', '\t']) {
         for (const chunks of layouts(text)) {
             t.deepEqual(await parse(chunks, { headers, separator, skipEmptyLines: true }), [
                 { name: 'Δelta', code: 'var label = "demo";' },
-                { name: '', code: '' },
                 { name: '', code: ' \n ' },
             ]);
         }

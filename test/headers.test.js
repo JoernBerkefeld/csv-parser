@@ -89,7 +89,7 @@ for (const separator of [',', '\t']) {
     test(`raw inferred headers are strings with Buffer values (${JSON.stringify(separator)})`, async (t) => {
         const input = Buffer.from(`"naïve"${separator}empty\r\nΔelta${separator}`);
         for (const chunks of [[input], [...input].map((byte) => Buffer.from([byte]))]) {
-            const parser = csv({ raw: true, separator });
+            const parser = csv({ raw: true, separator, skipEmptyLines: false });
             const observedHeaders = [];
             parser.on('headers', (headers) => {
                 observedHeaders.push(headers);
@@ -102,7 +102,7 @@ for (const separator of [',', '\t']) {
             t.deepEqual(observedHeaders, [['naïve', 'empty']]);
         }
 
-        const parser = csv({ raw: true, separator });
+        const parser = csv({ raw: true, separator, skipEmptyLines: false });
         const observedHeaders = [];
         parser.on('headers', (headers) => {
             observedHeaders.push(headers);
@@ -118,7 +118,7 @@ for (const separator of [',', '\t']) {
             `name${separator}name`,
             `${separator}\nleft${separator}right`,
         ]) {
-            const parser = csv({ raw: true, separator });
+            const parser = csv({ raw: true, separator, skipEmptyLines: false });
             const rows = [];
             const errors = [];
             const headers = [];
@@ -188,7 +188,7 @@ for (const separator of [',', '\t']) {
 
     test(`duplicate headers at EOF and empty names fail (${JSON.stringify(separator)})`, async (t) => {
         for (const input of [`name${separator}name`, `${separator}\nleft${separator}right`]) {
-            const parser = csv({ separator });
+            const parser = csv({ separator, skipEmptyLines: false });
             const rows = [];
             parser.on('data', (row) => {
                 rows.push(row);

@@ -49,6 +49,12 @@ function parseArguments() {
                 strict = true;
                 continue;
             }
+            case '--no-skip-empty-lines':
+            case '--no-skipEmptyLines': {
+                skipEmptyLines = false;
+                continue;
+            }
+            case '--skip-empty-lines':
             case '--skipEmptyLines': {
                 skipEmptyLines = true;
                 continue;
@@ -134,7 +140,8 @@ if (argv.help || (!filename && process.stdin.isTTY)) {
   --separator,-s      Set the separator character ("," by default)
   --skipComments,-c   Skip '#' comments; a following value sets a custom marker
   --skipComments=...  Set a custom comment marker without consuming a filename
-  --skipEmptyLines    Skip empty and whitespace-only unquoted records
+  --skipEmptyLines    Skip empty records (enabled by default)
+  --no-skip-empty-lines  Preserve empty records; strict widths still apply
   --skipLines,-l      Set the number of lines to skip to before parsing headers
   --strict            Require column length match headers length
   --version,-v        Print out the installed version

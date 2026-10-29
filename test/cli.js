@@ -4,22 +4,28 @@ import { execa } from 'execa';
 
 const binPath = fileURLToPath(new URL('../bin/csv-parser', import.meta.url));
 
-test('CLI skipEmptyLines is opt-in and preserves quoted blanks and delimiters', async (t) => {
-    const input = 'a,b\n\n \t \n"",\n,\n1,2\n';
-    const skipped = await execa(process.execPath, [binPath, '--skipEmptyLines'], { input });
-    t.deepEqual(
-        skipped.stdout.split('\n').map((row) => JSON.parse(row)),
-        [
-            { a: '', b: '' },
-            { a: '', b: '' },
-            { a: '1', b: '2' },
-        ],
-    );
-    const defaults = await execa(process.execPath, [binPath], { input: 'a\n\nx\n' });
-    t.deepEqual(
-        defaults.stdout.split('\n').map((row) => JSON.parse(row)),
-        [{}, { a: 'x' }],
-    );
+test('CLI skips exact empties by default with explicit opt-out', async (t) => {
+    const input = 'a,b\n\n \t \n"",\n,\n" ",\n1,2\n';
+    for (const flags of [[], ['--skipEmptyLines'], ['--skip-empty-lines']]) {
+        const result = await execa(process.execPath, [binPath, ...flags], { input });
+        t.deepEqual(
+            result.stdout.split('\n').map((row) => JSON.parse(row)),
+            [
+                { a: ' ', b: '' },
+                { a: '1', b: '2' },
+            ],
+        );
+    }
+    for (const flag of ['--no-skip-empty-lines', '--no-skipEmptyLines']) {
+        const result = await execa(process.execPath, [binPath, flag], { input: 'a,b\n,\n"",""\n' });
+        t.deepEqual(
+            result.stdout.split('\n').map((row) => JSON.parse(row)),
+            [
+                { a: '', b: '' },
+                { a: '', b: '' },
+            ],
+        );
+    }
 });
 
 test('CLI parser failures report one concise error and exit unsuccessfully', async (t) => {
@@ -180,5 +186,5 @@ test('CLI help demonstrates bare/custom comments, stdin and ordering', async (t)
 
 test('CLI help advertises skipEmptyLines', async (t) => {
     const result = await execa(process.execPath, [binPath, '--help'], { reject: false });
-    t.regex(result.stderr, /--skipEmptyLines\s+Skip empty and whitespace-only unquoted records/);
+    t.regex(result.stderr, /--skipEmptyLines\s+Skip empty records \(enabled by default\)/);
 });
